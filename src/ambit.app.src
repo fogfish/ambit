@@ -1,0 +1,20 @@
+{application, ambit,
+   [
+      {description, "distributed actors"},
+      {vsn,         "0.0.0"},
+      {modules,     []},
+      {registered,  []},
+      {applications,[
+         kernel
+        ,stdlib
+        ,lager
+        ,pipe
+        ,feta
+        ,pts
+        ,ek
+        ,pq
+      ]},
+      {mod, {ambit_app, []}},
+      {env, []}
+   ]
+}.  

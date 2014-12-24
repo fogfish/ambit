@@ -205,7 +205,7 @@ free_service(Name, #{sup := Sup, services := Services}=State) ->
 
 %%
 %%
-enq_service(Name, Service, #{processes := Processes, service := Services}=State) ->
+enq_service(Name, Service, #{processes := Processes, services := Services}=State) ->
    {ok, 
       State#{
          services  => bst:insert(Name, Service, Services),

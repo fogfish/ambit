@@ -81,6 +81,7 @@ handle({{handoff,_Addr, _Peer, _Node}, {whereis,_Name}}, Tx, State) ->
 %%
 handle({join, Peer, Pid}, _Tx, State) ->
    %% new node joined cluster, relocate vnode
+   ?NOTICE("ambit [peer]: join ~s", [Peer]),
    lists:foreach(
       fun({VNode, _}) ->
          case pns:whereis(vnode, VNode) of

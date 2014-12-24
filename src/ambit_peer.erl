@@ -90,7 +90,7 @@ handle({join, Peer, Pid}, _Tx, State) ->
                pipe:send(X, {transfer, Peer, Pid})
          end
       end,
-      ek:ioctl(ambit, {lookup, Peer})
+      ek:whois(ambit, Peer)
    ),
    {next_state, handle, State};
 

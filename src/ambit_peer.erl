@@ -42,27 +42,35 @@ ioctl(_, _) ->
 %%
 %%
 handle({{primary, Addr, _Peer, _Node}, {init, Name, Service}}, Tx, State) ->
-   pipe:ack(Tx, 
-      pts:call(vnode, Addr, {init, Name, Service})
-   ),
+   _ = pts:send(vnode, Addr, primary),
+   R = pts:call(vnode, Addr, {init, Name, Service}), 
+   pipe:ack(Tx, R),
    {next_state, handle, State};
 
-% handle({spawn, {handoff, Addr, _Peer, _Node}, Name, Opts}, _, State) ->
+handle({{handoff, Addr, _Peer, _Node}, {init, Name, Service}}, Tx, State) ->
+   _ = pts:send(vnode, Addr, handoff),
+   R = pts:call(vnode, Addr, {init, Name, Service}), 
+   pipe:ack(Tx, R),
+   {next_state, handle, State};
 
 %%
 %%
 handle({{primary, Addr, _Peer, _Node}, {free, Name}}, Tx, State) ->
-   pipe:ack(Tx, 
-      pts:call(vnode, Addr, {free, Name})
-   ),
+   _ = pts:send(vnode, Addr, primary),
+   R = pts:call(vnode, Addr, {free, Name}), 
+   pipe:ack(Tx, R),
    {next_state, handle, State};
 
-% handle({free,  {handoff, Addr, _Peer, _Node}, Name, Opts}, _, State) ->
+handle({{handoff, Addr, _Peer, _Node}, {free, Name}}, Tx, State) ->
+   _ = pts:send(vnode, Addr, handoff),
+   R = pts:call(vnode, Addr, {free, Name}), 
+   pipe:ack(Tx, R),
+   {next_state, handle, State};
 
 %%
 %%
-handle({{primary,_Addr, _Peer, _Node}, {whereis, Name}}, Tx, State) ->
-   pipe:ack(Tx, pns:whereis(ambit, Name)),
+handle({{primary, Addr, _Peer, _Node}, {whereis, Name}}, Tx, State) ->
+   pipe:ack(Tx, pns:whereis(ambit, {Addr, Name})),
    {next_state, handle, State};
 
 handle({{handoff,_Addr, _Peer, _Node}, {whereis,_Name}}, Tx, State) ->

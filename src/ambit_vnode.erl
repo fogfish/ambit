@@ -10,13 +10,16 @@
   ,init/1
   ,free/2
   ,ioctl/2
-  ,idle/3
-  ,primary/3
-  ,handoff/3
+  % ,idle/3
+  ,handle/3
+  % ,primary/3
+  % ,handoff/3
   ,transfer/3
 ]).
 
--define(CHILD(Name, Service), {Name, Service, permanent, 30000, worker, dynamic}).
+-define(CHILD(Spawn, Addr, Name, Service), 
+   {Name, {ambit_actor, start_link, [Spawn, Addr, Name, Service]}, permanent, 30000, worker, dynamic}
+).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -30,7 +33,8 @@ start_link(vnode, Addr) ->
 init([Addr]) ->
    ?DEBUG("ambit [vnode]: init ~b", [Addr]),
    ok = pns:register(vnode, Addr, self()),
-   {ok, idle, #{addr => Addr}}.
+   {ok, Sup} = init_sup(Addr),   
+   {ok, handle, #{addr => Addr, sup => Sup}}.
 
 free(_, #{addr := Addr}) ->
    free_sup(Addr),
@@ -46,91 +50,36 @@ ioctl(_, _) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%%  
-idle(primary, _Tx, #{addr := Addr}=State) ->
-   %% activate vnode as primary 
-   {ok, Sup} = init_sup(Addr),
-   {next_state, primary, 
-      State#{
-         sup       => Sup,
-         services  => bst:new()
-      }
-   };
-
-idle(handoff, _Tx, State) ->
-   %% activate vnode as handoff
-   {next_state, handoff, 
-      State#{
-         services  => bst:new(),
-         processes => q:new()
-      }
-   }.
-
 %%
-%%
-primary({init, Name, Service}, Tx, State0) ->
-   {Result, State} = init_service(Name, Service, State0),
+handle({primary, Name, Service}, Tx, State0) ->
+   {Result, State} = init_service(primary, Name, Service, State0),
    pipe:ack(Tx, Result),
-   {next_state, primary, State};
+   {next_state, handle, State};
 
-primary({free, Name}, Tx, State0) ->
+handle({handoff, Name, Service}, Tx, State0) ->
+   {Result, State} = init_service(handoff, Name, Service, State0),
+   pipe:ack(Tx, Result),
+   {next_state, handle, State};
+
+handle({free, Name}, Tx, State0) ->
    {Result, State} = free_service(Name, State0),
    pipe:ack(Tx, Result),
-   {next_state, primary, State};
+   {next_state, handle, State};
 
-primary({transfer, Peer, Pid}, _, #{addr := Addr, sup := Sup}=State) ->
+handle({transfer, Peer, Pid}, _, #{addr := Addr, sup := Sup}=State) ->
    %% initial child transfer procedure
    ?NOTICE("ambit [vnode]: transfer ~b to ~s ~p", [Addr, Peer, Pid]),
    erlang:send(self(), transfer),
    {next_state, transfer, 
       State#{
          vnode     => {primary, Addr, Peer, Pid},
-         processes => q:new([X || {X, _, _, _} <- supervisor:which_children(Sup)])
+         processes => q:new([{Name, X} || {Name, X, _, _} <- supervisor:which_children(Sup)])
       }
    };
 
-primary(primary, _Tx, State) ->
-   {next_state, primary, State};
-
-primary(handoff, _Tx, State) ->
-   {next_state, primary, State};
-
-primary(Msg, _Tx, State) ->
+handle(Msg, _Tx, State) ->
    ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
-   {next_state, primary, State}.
-
-%%
-%%
-handoff({init, Name, Service}, Tx, State0) ->
-   {Result, State} = enq_service(Name, Service, State0),
-   pipe:ack(Tx, Result),
-   {next_state, handoff, State};
-
-handoff({free, Name}, Tx, State0) ->
-   {Result, State} = deq_service(Name, State0),
-   pipe:ack(Tx, Result),
-   {next_state, handoff, State};
-
-handoff({transfer, Peer, Pid}, _, #{addr := Addr}=State) ->
-   %% initial child transfer procedure
-   ?NOTICE("ambit [vnode]: transfer ~b to ~s ~p", [Addr, Peer, Pid]),
-   erlang:send(self(), transfer),
-   {next_state, transfer, 
-      State#{
-         vnode => {primary, Addr, Peer, Pid}
-      }
-   };
-
-handoff(primary, _Tx, State) ->
-   {next_state, handoff, State};
-
-handoff(handoff, _Tx, State) ->
-   {next_state, handoff, State};
-
-handoff(Msg, _Tx, State) ->
-   ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
-   {next_state, handoff, State}.
-
+   {next_state, handle, State}.
 
 %%
 %% 
@@ -175,14 +124,13 @@ free_sup(Addr) ->
 
 %%
 %%
-init_service(Name, Service, #{addr := Addr, sup := Sup, services := Services}=State) ->
-   case supervisor:start_child(Sup, ?CHILD(Name, Service)) of
+init_service(Spawn, Name, Service, #{addr := Addr, sup := Sup}=State) ->
+   case supervisor:start_child(Sup, ?CHILD(Spawn, Addr, Name, Service)) of
       {ok, Pid} ->
-         pns:register(ambit, {Addr, Name}, Pid),
-         {{ok, Pid}, State#{services => bst:insert(Name, Service, Services)}};
+         {{ok, ambit_actor:process(Pid)}, State};
 
       {error, {already_started, Pid}} ->
-         {{ok, Pid}, State};
+         {{ok, ambit_actor:process(Pid)}, State};
 
       Error ->
          {Error, State}
@@ -190,11 +138,11 @@ init_service(Name, Service, #{addr := Addr, sup := Sup, services := Services}=St
 
 %%
 %%
-free_service(Name, #{sup := Sup, services := Services}=State) ->
+free_service(Name, #{sup := Sup}=State) ->
    supervisor:terminate_child(Sup, Name),
    case supervisor:delete_child(Sup, Name) of
       ok ->
-         {ok, State#{services => bst:remove(Name, Services)}};
+         {ok, State};
 
       {error, not_found} ->
          {ok, State};
@@ -205,34 +153,16 @@ free_service(Name, #{sup := Sup, services := Services}=State) ->
 
 %%
 %%
-enq_service(Name, Service, #{processes := Processes, services := Services}=State) ->
-   {ok, 
-      State#{
-         services  => bst:insert(Name, Service, Services),
-         processes => q:enq(Name, Processes)
-      }
-   }.
-
-deq_service(Name, #{service := Services}=State) ->
-   {ok, State#{services => bst:remove(Name, Services)}}.
-
-%%
-%%
-handoff_service(#{vnode := {_, _, _, Pid}=Vnode, processes := Processes, services := Services}=State) ->
-   Name = q:head(Processes),
+handoff_service(#{vnode := {_, _, _, Pid}=Vnode, processes := Processes}=State) ->
+   {Name, Act} = q:head(Processes),
+   Service     = ambit_actor:service(Act),
    ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
-   case bst:lookup(Name, Services) of
-      undefined ->
+   case pipe:call(Pid, {Vnode, {init, Name, Service}}) of
+      {ok, _} ->
          {ok, State#{processes => q:tail(Processes)}};
 
-      Service   ->
-         case pipe:call(Pid, {Vnode, {init, Name, Service}}) of
-            {ok, _} ->
-               {ok, State#{processes => q:tail(Processes)}};
-
-            Error   ->
-               {Error, State}
-         end
+      Error   ->
+         {Error, State}
    end.
 
 

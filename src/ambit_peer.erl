@@ -42,27 +42,23 @@ ioctl(_, _) ->
 %%
 %%
 handle({{primary, Addr, _Peer, _Node}, {init, Name, Service}}, Tx, State) ->
-   _ = pts:send(vnode, Addr, primary),
-   R = pts:call(vnode, Addr, {init, Name, Service}), 
+   R = pts:call(vnode, Addr, {primary, Name, Service}), 
    pipe:ack(Tx, R),
    {next_state, handle, State};
 
 handle({{handoff, Addr, _Peer, _Node}, {init, Name, Service}}, Tx, State) ->
-   _ = pts:send(vnode, Addr, handoff),
-   R = pts:call(vnode, Addr, {init, Name, Service}), 
+   R = pts:call(vnode, Addr, {handoff, Name, Service}), 
    pipe:ack(Tx, R),
    {next_state, handle, State};
 
 %%
 %%
 handle({{primary, Addr, _Peer, _Node}, {free, Name}}, Tx, State) ->
-   _ = pts:send(vnode, Addr, primary),
    R = pts:call(vnode, Addr, {free, Name}), 
    pipe:ack(Tx, R),
    {next_state, handle, State};
 
 handle({{handoff, Addr, _Peer, _Node}, {free, Name}}, Tx, State) ->
-   _ = pts:send(vnode, Addr, handoff),
    R = pts:call(vnode, Addr, {free, Name}), 
    pipe:ack(Tx, R),
    {next_state, handle, State};

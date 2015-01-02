@@ -10,10 +10,7 @@
   ,init/1
   ,free/2
   ,ioctl/2
-  % ,idle/3
-  ,handle/3
-  % ,primary/3
-  % ,handoff/3
+  ,active/3
   ,transfer/3
 ]).
 
@@ -34,7 +31,7 @@ init([Addr]) ->
    ?DEBUG("ambit [vnode]: init ~b", [Addr]),
    ok = pns:register(vnode, Addr, self()),
    {ok, Sup} = init_sup(Addr),   
-   {ok, handle, #{addr => Addr, sup => Sup}}.
+   {ok, active, #{addr => Addr, sup => Sup}}.
 
 free(_, #{addr := Addr}) ->
    free_sup(Addr),
@@ -51,22 +48,22 @@ ioctl(_, _) ->
 
 %%
 %%
-handle({primary, Name, Service}, Tx, State0) ->
+active({primary, Name, Service}, Tx, State0) ->
    {Result, State} = init_service(primary, Name, Service, State0),
    pipe:ack(Tx, Result),
-   {next_state, handle, State};
+   {next_state, active, State};
 
-handle({handoff, Name, Service}, Tx, State0) ->
+active({handoff, Name, Service}, Tx, State0) ->
    {Result, State} = init_service(handoff, Name, Service, State0),
    pipe:ack(Tx, Result),
-   {next_state, handle, State};
+   {next_state, active, State};
 
-handle({free, Name}, Tx, State0) ->
+active({free, Name}, Tx, State0) ->
    {Result, State} = free_service(Name, State0),
    pipe:ack(Tx, Result),
-   {next_state, handle, State};
+   {next_state, active, State};
 
-handle({transfer, Peer, Pid}, _, #{addr := Addr, sup := Sup}=State) ->
+active({transfer, Peer, Pid}, _, #{addr := Addr, sup := Sup}=State) ->
    %% initial child transfer procedure
    ?NOTICE("ambit [vnode]: transfer ~b to ~s ~p", [Addr, Peer, Pid]),
    erlang:send(self(), transfer),
@@ -77,9 +74,9 @@ handle({transfer, Peer, Pid}, _, #{addr := Addr, sup := Sup}=State) ->
       }
    };
 
-handle(Msg, _Tx, State) ->
+active(Msg, _Tx, State) ->
    ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
-   {next_state, handle, State}.
+   {next_state, active, State}.
 
 %%
 %% 

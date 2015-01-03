@@ -11,15 +11,21 @@
 -endif.
 
 %%
+%% size of ambit api request pool (concurrent operations)
+-ifndef(CONFIG_POOL_REQ).
+-define(CONFIG_POOL_REQ,  100).
+-endif.
+
 %%
+%% request timeout in milliseconds
 -ifndef(CONFIG_TIMEOUT_REQ).
 -define(CONFIG_TIMEOUT_REQ,  30000).
 -endif.
 
 %%
-%%
--ifndef(CONFIG_POOL_REQ).
--define(CONFIG_POOL_REQ,  100).
+%% anti entropy frequency in milliseconds
+-ifndef(CONFIG_CYCLE_AE).
+-define(CONFIG_CYCLE_AE,     10000).
 -endif.
 
 

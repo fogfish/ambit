@@ -40,55 +40,56 @@ ioctl(_, _) ->
 
 %%
 %%
-idle(Req, Tx, _State) ->
+idle({Policy, Name, Fun}, Tx, _State) ->
    {next_state, exec, 
       #{
-         req  => erlang:element(1, Req)
-        ,ref  => request(erlang:element(2, Req), Req)
-        ,ret  => []
-        ,tx   => Tx
+         policy  => Policy
+        ,req     => request(Name, Fun)
+        ,ret     => []
+        ,tx      => Tx
       },
       ?CONFIG_TIMEOUT_REQ
    }.
 
-exec({'DOWN', Ref, process, _Pid, Reason}, _Tx, #{req := Req, ref := Ref0, ret := Ret0, tx := Tx}=State) ->
-   case lists:keytake(Ref, 2, Ref0) of
-      {value, {Vnode, _, _},   []} ->
-         pipe:ack(Tx, return(Req, [{type(Vnode), {error, Reason}} | Ret0])),
+exec({'DOWN', Ref, process, _Pid, Reason}, _Tx, #{policy := Policy, req := Req0, ret := Ret0, tx := Tx}=State) ->
+   case lists:keytake(Ref, 2, Req0) of
+      {value, {Vnode, _, _},  []} ->
+         pipe:ack(Tx, return(Policy, [{type(Vnode), {error, Reason}} | Ret0])),
          {next_state, idle, #{}};
 
-      {value, {Vnode, _, _}, Refs} ->
+      {value, {Vnode, _, _}, Req} ->
          {next_state, exec, 
             State#{
-               ref => Refs
+               req => Req
               ,ret => [{type(Vnode), {error, Reason}} | Ret0]
             }
          }
    end;
 
-exec({Ref, Result}, _Tx, #{req :=Req, ref := Ref0, ret := Ret0, tx := Tx}=State) ->
-   case lists:keytake(Ref, 3, Ref0) of
+exec({Ref, Result}, _Tx, #{policy := Policy, req := Req0, ret := Ret0, tx := Tx}=State) ->
+   case lists:keytake(Ref, 3, Req0) of
       {value, {Vnode, Mref, _},   []} ->
          erlang:demonitor(Mref, [flush]),
-         pipe:ack(Tx, return(Req, [{type(Vnode), Result} | Ret0])),
+         pipe:ack(Tx, return(Policy, [{type(Vnode), Result} | Ret0])),
          {next_state, idle, 
             State#{
                ret => [Result | Ret0]
             }
          };
 
-      {value, {Vnode, Mref, _}, Refs} ->
+      {value, {Vnode, Mref, _}, Req} ->
          erlang:demonitor(Mref, [flush]),
          {next_state, exec, 
             State#{
-               ref => Refs
+               req => Req
               ,ret => [{type(Vnode), Result} | Ret0]
             }
          }         
    end;
 
-exec(timeout, _Tx, _State) ->
-   {next_state, idle, #{}}.
+exec(timeout, _Tx, #{tx := Tx}=State) ->
+   pipe:ack(Tx, {error, timeout}),
+   {stop, normal, State}.
 
 
 %%%----------------------------------------------------------------------------   
@@ -98,50 +99,45 @@ exec(timeout, _Tx, _State) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%%
+%% return type of vnode
 type({Type, _Addr, _Key, _Peer}) ->
    Type.
 
 %%
-%%
-request(Ns, Req) ->
+%% request each vnode
+request(Name, Fun) ->
    lists:map(
       fun({_Type, _Addr, _Key, Peer}=Vnode) ->
          ?DEBUG("ambit [req]: vnode ~p", [Vnode]),
          Mref = erlang:monitor(process, Peer),
-         Ref  = pipe:cast(Peer, {Vnode, Req}),
-         {Vnode, Mref, Ref}
+         {Vnode, Mref, Fun(Vnode)}
       end,
-      ek:successors(ambit, Ns)
+      ek:successors(ambit, Name)
    ).
 
 %%
 %% 
-return(init, List) ->
-   %% init is successful if it is executed by any primary shard or handoff
+return(any, List) ->
+   %% request is successful if it is executed by any primary or handoff shards
    case [X || {primary, {ok, X}} <- List] of
       [] ->
-         case [ok || {handoff,  ok} <- List] of
+         case [ok || {handoff, ok} <- List] of
             [] ->
                {error, [X || {_, {error, X}} <- List]};
             _  ->
                {ok, []}
          end;
-      Pid ->
-         {ok, Pid}
+      Val ->
+         {ok, Val}
    end;
 
-return(free, List) ->
-   %% free is successful if it is executed by each primary shard
+return(all, List) ->
+   %% request is successful if it is executed by each primary shard
    case [X || {primary, {error, X}} <- List] of
       []  ->
          ok;
       Reason ->
          {error, Reason}
-   end;
-
-return(whereis, List) ->
-   [X || {_, X} <- List, is_pid(X)].
-
+   end.
 
 

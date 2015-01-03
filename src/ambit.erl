@@ -29,7 +29,8 @@ start() ->
 spawn(Name, Service) ->
    Ref = pq:lease(ambit_req),
    try
-      pipe:call(pq:pid(Ref), {init, Name, Service})
+      pipe:call(pq:pid(Ref), 
+         {any, Name, fun(Vnode) -> ambit_peer:spawn_(Vnode, Name, Service) end})
    after
       pq:release(Ref)
    end.
@@ -41,7 +42,8 @@ spawn(Name, Service) ->
 free(Name) ->
    Ref = pq:lease(ambit_req),
    try
-      pipe:call(pq:pid(Ref), {free, Name})
+      pipe:call(pq:pid(Ref), 
+         {all, Name, fun(Vnode) -> ambit_peer:close(Vnode, Name) end})
    after
       pq:release(Ref)
    end.
@@ -53,17 +55,19 @@ free(Name) ->
 whereis(Name) ->
    Ref = pq:lease(ambit_req),
    try
-      pipe:call(pq:pid(Ref), {whereis, Name})
+      {ok, List} = pipe:call(pq:pid(Ref), 
+         {any, Name, fun(Vnode) -> ambit_peer:whereis(Vnode, Name) end}),
+      [X || X <- List, is_pid(X)]
    after
       pq:release(Ref)
    end.
 
 %%
-%% lookup vnodes manages given service
+%% lookup vnode, managed by given peer
 -spec(whois/1 :: (any()) -> [ek:vnode()]).
 
-whois(Name) ->
-   ek:successors(ambit, Name).
+whois(Peer) ->
+   ek:successors(ambit, Peer).
 
 
 

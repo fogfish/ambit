@@ -14,7 +14,7 @@
 
 -define(VNODE, [
    'read-through'
-  ,{keylen,   1}
+  ,{keylen,   inf}
   ,{entity,   ambit_vnode}
   ,{factory,  transient}
 ]).

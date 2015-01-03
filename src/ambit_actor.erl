@@ -1,5 +1,5 @@
 %% @description
-%%   actor management process
+%%   actor container / supervisor process
 -module(ambit_actor).
 -behaviour(pipe).
 

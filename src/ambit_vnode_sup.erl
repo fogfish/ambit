@@ -1,3 +1,5 @@
+%% @description
+%%
 -module(ambit_vnode_sup).
 -behaviour(supervisor).
 

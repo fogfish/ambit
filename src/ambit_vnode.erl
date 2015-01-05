@@ -66,28 +66,36 @@ active({handoff, Vnode}, _, #{vnode := Self, sup := Sup}=State) ->
       }
    };
 
-active(Msg, _Tx, State) ->
+active(Msg, _, State) ->
    ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
    {next_state, active, State}.
 
 %%
-%% 
+%% @todo: transfer as node service with queue
 transfer(transfer, _, #{vnode := Vnode, processes := {}}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p completed", [Vnode]),
    {stop, normal, State};
 
-transfer(transfer, _, State0) ->
-   case handoff_service(State0) of
-      {ok, State} ->
-         erlang:send(self(), transfer),
-         {next_state, transfer, State};
+transfer(transfer, _, #{target := Vnode, processes := Processes}=State) ->
+   {Name, Act} = q:head(Processes),
+   Service     = ambit_actor:service(Act),
+   ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
+   ambit_peer:cast(Vnode, {spawn, Vnode, self(), Name, Service}),
+   {next_state, transfer, State, 5000}; %% @todo: config
 
-      {_,  State} ->
-         erlang:send_after(1000, self(), transfer),
-         {next_state, transfer, State}
-   end;
+transfer({Vnode, {ok, _}}, _, #{target := Vnode, processes := Processes}=State) ->
+   erlang:send(self(), transfer),
+   {next_state, transfer, State#{processes => q:tail(Processes)}};
 
-transfer(Msg, _Tx, State) ->
+transfer({Vnode,  _Error}, _, #{target := Vnode}=State) ->
+   erlang:send_after(1000, self(), transfer),
+   {next_state, transfer, State};
+
+transfer(timeout, _, #{target := Vnode}=State) ->
+   erlang:send_after(1000, self(), transfer),
+   {next_state, transfer, State};
+
+transfer(Msg, _, State) ->
    ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
    {next_state, transfer, State}.
 
@@ -112,17 +120,4 @@ free_sup(Addr) ->
    supervisor:delete_child(ambit_vnode_root_sup, Addr).
 
 
-%%
-%%
-handoff_service(#{target := Vnode, processes := Processes}=State) ->
-   {Name, Act} = q:head(Processes),
-   Service     = ambit_actor:service(Act),
-   ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
-   case ambit_peer:spawn(Vnode, Name, Service) of
-      {ok, _} ->
-         {ok, State#{processes => q:tail(Processes)}};
-
-      Error   ->
-         {Error, State}
-   end.
 

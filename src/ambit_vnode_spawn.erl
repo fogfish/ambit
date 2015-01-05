@@ -46,16 +46,16 @@ ioctl(_, _) ->
 
 %%
 %%
-handle({primary, Name, Service}, Tx, State) ->
-   pipe:ack(Tx, create(primary, Name, Service, State)),
+handle({spawn, {primary, _, _, _}=Vnode, Pid, Name, Service}, _, State) ->
+   ambit_peer:send(Pid, {Vnode, create(primary, Name, Service, State)}),
    {next_state, handle, State};
 
-handle({handoff, Name, Service}, Tx, State) ->
-   pipe:ack(Tx, create(handoff, Name, Service, State)),
+handle({spawn, {handoff, _, _, _}=Vnode, Pid, Name, Service}, _, State) ->
+   ambit_peer:send(Pid, {Vnode, create(handoff, Name, Service, State)}),
    {next_state, handle, State};
 
-handle({free, Name}, Tx, State) ->
-   pipe:ack(Tx, destroy(Name, State)),
+handle({free,  Vnode, Pid, Name}, _, State) ->
+   ambit_peer:send(Pid, {Vnode, destroy(Name, State)}),
    {next_state, handle, State};
 
 handle(_, _Tx, State) ->

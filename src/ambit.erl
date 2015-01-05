@@ -30,7 +30,7 @@ spawn(Name, Service) ->
    Ref = pq:lease(ambit_req),
    try
       pipe:call(pq:pid(Ref), 
-         {any, Name, fun(Vnode) -> ambit_peer:spawn_(Vnode, Name, Service) end})
+         {any, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {spawn, Vnode, self(), Name, Service}) end})
    after
       pq:release(Ref)
    end.
@@ -43,7 +43,7 @@ free(Name) ->
    Ref = pq:lease(ambit_req),
    try
       pipe:call(pq:pid(Ref), 
-         {all, Name, fun(Vnode) -> ambit_peer:close(Vnode, Name) end})
+         {all, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {free, Vnode, self(), Name}) end})
    after
       pq:release(Ref)
    end.
@@ -56,7 +56,7 @@ whereis(Name) ->
    Ref = pq:lease(ambit_req),
    try
       {ok, List} = pipe:call(pq:pid(Ref), 
-         {any, Name, fun(Vnode) -> ambit_peer:whereis(Vnode, Name) end}),
+         {any, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {whereis, self(), Name}) end}),
       [X || X <- List, is_pid(X)]
    after
       pq:release(Ref)

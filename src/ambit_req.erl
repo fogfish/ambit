@@ -66,9 +66,9 @@ exec({'DOWN', Ref, process, _Pid, Reason}, _Tx, #{policy := Policy, req := Req0,
          }
    end;
 
-exec({Ref, Result}, _Tx, #{policy := Policy, req := Req0, ret := Ret0, tx := Tx}=State) ->
-   case lists:keytake(Ref, 3, Req0) of
-      {value, {Vnode, Mref, _},   []} ->
+exec({Vnode, Result}, _Tx, #{policy := Policy, req := Req0, ret := Ret0, tx := Tx}=State) ->
+   case lists:keytake(Vnode, 1, Req0) of
+      {value, {Vnode, Mref},   []} ->
          erlang:demonitor(Mref, [flush]),
          pipe:ack(Tx, return(Policy, [{type(Vnode), Result} | Ret0])),
          {next_state, idle, 
@@ -77,7 +77,7 @@ exec({Ref, Result}, _Tx, #{policy := Policy, req := Req0, ret := Ret0, tx := Tx}
             }
          };
 
-      {value, {Vnode, Mref, _}, Req} ->
+      {value, {Vnode, Mref}, Req} ->
          erlang:demonitor(Mref, [flush]),
          {next_state, exec, 
             State#{
@@ -110,7 +110,8 @@ request(Name, Fun) ->
       fun({_Type, _Addr, _Key, Peer}=Vnode) ->
          ?DEBUG("ambit [req]: vnode ~p", [Vnode]),
          Mref = erlang:monitor(process, Peer),
-         {Vnode, Mref, Fun(Vnode)}
+         _    = Fun(Vnode),
+         {Vnode, Mref}
       end,
       ek:successors(ambit, Name)
    ).

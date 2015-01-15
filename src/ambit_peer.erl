@@ -34,8 +34,13 @@ start_link() ->
    pipe:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-   {ok, _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
-   ok      = ek:join(ambit, scalar:s(erlang:node()), self()),   
+   {ok,   _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
+   {ok, Pid} = pq:start_link([
+      {type,     reusable}     
+     ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, thing)}    
+     ,{worker,   ambit_coordinator}    
+   ]),
+   ok = ek:join(ambit, scalar:s(erlang:node()), Pid),
    {ok, handle, #{}}.
 
 free(_, _) ->

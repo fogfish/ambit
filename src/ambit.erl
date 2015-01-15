@@ -6,8 +6,8 @@
 -export([
    spawn/2,
    free/1,
-   whereis/1,
-   whois/1
+   whereis/1
+   % whois/1
 ]).
 
 %%
@@ -27,13 +27,13 @@ start() ->
 -spec(spawn/2 :: (any(), any()) -> {ok, [pid()]} | {error, any()}).
 
 spawn(Name, Service) ->
-   Ref = pq:lease(ambit_req),
-   try
-      pipe:call(pq:pid(Ref), 
-         {any, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {spawn, Vnode, self(), Name, Service}) end})
-   after
-      pq:release(Ref)
-   end.
+   ambit_coordinator:call(Name, {spawn, Name, Service}).
+   % try
+   %    pipe:call(pq:pid(Ref), 
+   %       {any, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {spawn, Vnode, self(), Name, Service}) end})
+   % after
+   %    pq:release(Ref)
+   % end.
 
 %%
 %% free service on the cluster
@@ -62,12 +62,35 @@ whereis(Name) ->
       pq:release(Ref)
    end.
 
-%%
-%% lookup vnode, managed by given peer
--spec(whois/1 :: (any()) -> [ek:vnode()]).
+% %%
+% %% lookup coordinator node for given key
+% -spec(whois/1 :: (any()) -> ek:vnode()).
 
-whois(Peer) ->
-   ek:successors(ambit, Peer).
+% whois(Key) ->
+%    List = ek:successors(ambit, Key),
+%    head(
+%       lists:dropwhile(
+%          fun({X, _, _, _}) -> X =/= primary end, 
+%          List
+%       ),
+%       List
+%    ).
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% private
+%%%
+%%%----------------------------------------------------------------------------   
+
+% %%
+% %% may be head
+% head([Head | _], _) ->
+%    Head;
+% head(_, [Head | _]) ->
+%    Head.
+
+
+
 
 
 

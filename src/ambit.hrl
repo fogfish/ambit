@@ -11,9 +11,19 @@
 -endif.
 
 %%
-%% size of ambit api request pool (concurrent operations)
--ifndef(CONFIG_POOL_REQ).
--define(CONFIG_POOL_REQ,  100).
+%% heap of vnode processes
+-define(HEAP_VNODE, [
+   'read-through'
+  ,{keylen,   inf}
+  ,{entity,   ambit_vnode}
+  ,{factory,  transient}
+]).
+
+
+%%
+%% size of ambit api request pool (capacity of coordinator)
+-ifndef(CONFIG_IO_POOL).
+-define(CONFIG_IO_POOL,  100).
 -endif.
 
 %%

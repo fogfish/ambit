@@ -42,6 +42,7 @@ init([Addr]) ->
 free(_, #{vnode := {_, Addr, _, _}, hands := Hands}) ->
    free_sup(Addr),
    lists:foreach(fun pipe:free/1, Hands),
+   ?DEBUG("ambit [vnode]: free ~b", [Addr]),      
    ok.
 
 ioctl(_, _) ->

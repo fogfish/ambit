@@ -27,13 +27,7 @@ start() ->
 -spec(spawn/2 :: (any(), any()) -> {ok, [pid()]} | {error, any()}).
 
 spawn(Name, Service) ->
-   ambit_coordinator:call(Name, {spawn, Name, Service}).
-   % try
-   %    pipe:call(pq:pid(Ref), 
-   %       {any, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {spawn, Vnode, self(), Name, Service}) end})
-   % after
-   %    pq:release(Ref)
-   % end.
+   ambit_coordinator:call(Name, ambit_req:new({spawn, Name, Service})).
 
 %%
 %% free service on the cluster

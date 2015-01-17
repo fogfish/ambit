@@ -17,7 +17,6 @@
    % api
   % ,bind/1
   ,call/2
-  ,call/3
   ,cast/2
 ]).
 
@@ -49,43 +48,26 @@ ioctl(_, _) ->
 %%
 %% request coordinator
 -spec(call/2 :: (any(), any()) -> {ok, any()} | {error, any()}).
--spec(call/3 :: (any(), any(), timeout()) -> {ok, any()} | {error, any()}).
 
-call(Key, Req) ->
-   call(Key, Req, 5000).
-
-call(Key, Req, Timeout) ->
-   {Pid, Vnode, Peers} = whois(Key),
-   Pool = pq:lease(Pid),
-   pipe:call(pq:pid(Pool), 
-      #{
-         is    => global,
-         vnode => Vnode, 
-         peers => Peers, 
-         pool  => Pool,
-         req   => Req, 
-         t => Timeout
-      }
-   ).
+call(Key, Req0) ->
+   {Pid, Req1} = ambit_req:whois(Key, Req0),
+   {UoW, Req2} = ambit_req:lease(Pid, Req1),
+   pipe:call(UoW, Req2).
 
 %%
 %% cast message to coordinator
 -spec(cast/2 :: (ek:vnode(), any()) -> reference()).
 
-cast({_, _, _, Pid}=Vnode, Req) ->
-   Pool = pq:lease(Pid),
-   pipe:cast(pq:pid(Pool), 
-      #{
-         is    => local,
-         vnode => Vnode, 
-         pool  => Pool, 
-         req   => Req, 
-         t     => infinity
-      }
-   ).
+cast({_, _, _, Pid} = Vnode, #{msg := Msg})
+ when erlang:node(Pid) =:= erlang:node() ->
+   ?DEBUG("ambit [coord]: cast ~p ~p", [Msg, Vnode]),
+   pipe:cast(lookup(Vnode), {Vnode, Msg});
 
-% cast(Key, Req) ->
-
+cast({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
+   ?DEBUG("ambit [coord]: cast ~p ~p", [_Msg, Vnode]),
+   {Pid, Req1} = ambit_req:whois(Vnode, Req0),
+   {UoW, Req2} = ambit_req:lease(Pid,   Req1),
+   pipe:cast(UoW, Req2).
 
 % * global cast as coordinator and domestic-only cast (local)
 % * todo lease multiple services from same pool
@@ -123,22 +105,33 @@ cast({_, _, _, Pid}=Vnode, Req) ->
 
 %%
 %%
-idle(#{is := global, vnode := Vnode, req := _Req} = State, Pipe, _State) ->
-   ?DEBUG("ambit [coord]: global req ~p", [_Req]),
-   case ensure(Vnode) of
+idle(#{mod := _, msg := _Msg} = Req0, Pipe, _State) ->
+   ?DEBUG("ambit [coord]: global req ~p", [_Msg]),
+   case ensure(ambit_req:vnode(Req0)) of
       {ok, _} ->
-         {next_state, domestic, req_self_vnode(State#{pipe => Pipe})};
+         %% @todo: validate quorum
+         {next_state, domestic, 
+            req_this_vnode(ambit_req:pipe(Pipe, Req0))
+         };
       {error, _} = Error ->
-         {next_state, idle, req_failed(Error, State#{pipe => Pipe})}
+         {_, Req1} = ambit_req:accept(Error, 
+            ambit_req:pipe(Pipe, Req0)
+         ),
+         {next_state, idle, ambit_req:free(Req1)}
    end;
 
-idle(#{is := local, vnode := Vnode, req := _Req} = State, Pipe, _State) ->
-   ?DEBUG("ambit [coord]: local req ~p", [_Req]),
-   case ensure(Vnode) of
+idle(#{msg := _Msg} = Req0, Pipe, _State) ->
+   ?DEBUG("ambit [coord]: local req ~p", [_Msg]),
+   case ensure(ambit_req:vnode(Req0)) of
       {ok, _} ->
-         {next_state, local, req_self_vnode(State#{pipe => Pipe})};
+         {next_state, domestic, 
+            req_this_vnode(ambit_req:pipe(Pipe, Req0))
+         };
       {error, _} = Error ->
-         {next_state, idle, req_failed(Error, State#{pipe => Pipe})}
+         {_, Req1} = ambit_req:accept(Error, 
+            ambit_req:pipe(Pipe, Req0)
+         ),
+         {next_state, idle, ambit_req:free(Req1)}
    end;
 
 idle(_, _, State) ->
@@ -146,11 +139,12 @@ idle(_, _, State) ->
 
 %%
 %%
-local({Tx, Value}, _, #{tx := Tx}=State) ->
-   {next_state, idle, req_success(Value, State)};
+local({Tx, Value}, _, #{tx := Tx}=Req0) ->
+   {_, Req1} = ambit_req:accept(Value, Req0),
+   {next_state, idle, ambit_req:free(Req1)};
 
-local(timeout, _, State) ->
-   {stop, timeout, req_failed({error, timeout}, State)};
+% local(timeout, _, State) ->
+%    {stop, timeout, req_commit({error, timeout}, State)};
 
 local(_, _, State) ->
    {next_state, idle, State}.
@@ -158,22 +152,32 @@ local(_, _, State) ->
 
 %%
 %% execute domestic 
-domestic({Tx, Value}, _, #{tx := Tx, peers := []}=State) ->
-   {next_state, idle, req_success(Value, State)};
+domestic({Tx, Value}, _,  {[{Tx, Vnode}], Req0}) ->
+   Req1 = ambit_req:accept(Value, Req0),
+   case ambit_req:peers(Req1) of
+      [Vnode] ->
+         {next_state, idle, ambit_req:free(Req1)};
+      _       ->
+         {next_state, foreign, req_peer_vnode(Req1)}
+   end;
 
-domestic({Tx,_Value}, _, #{tx := Tx, t := T}=State) ->
-   %% domestic request successes 
-   _ = tempus:cancel(T),
-   {next_state, foreign, req_peer_vnode(State)};
-
-domestic(timeout, _, State) ->
-   {stop, timeout, State};
+% domestic(timeout, _, State) ->
+%    {stop, timeout, State};
 
 domestic(_, _, State) ->
    {next_state, idle, State}.
 
 %%
 %%
+foreign({Tx, Value}, _, {List, Req0}) ->
+   Req1 = ambit_req:accept(Value, Req0),
+   case lists:keytake(Tx, 1, List) of
+      {value, {_Tx, _Vnode},   []} ->
+         {next_state, idle, ambit_req:free(Req1)};
+      {value, {_Tx, _Vnode}, Tail} ->
+         {next_state, foreign, {Tail, Req1}}
+   end;
+
 foreign(M, _, State) ->
    io:format("=> ~p~n", [M]),
    {next_state, foreign, State}.
@@ -186,21 +190,6 @@ foreign(M, _, State) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% who is responsible to coordinate key and execute transactions
-whois(Key) ->
-   Peers = ek:successors(ambit, Key),
-   case lists:dropwhile(fun({X, _, _, _}) -> X =/= primary end, Peers) of
-      [] ->
-         {_, _, _, Pid} = Vnode = hd(Peers),
-         Node = erlang:node(Pid),
-         {Pid, Vnode, [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node]};
-      L  ->
-         {_, _, _, Pid} = Vnode = hd(L),
-         Node = erlang:node(Pid),
-         {Pid, Vnode, [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node]}
-   end.
-
-%%
 %% lookup service hand of given Vnode
 lookup({Hand,  Addr, _, _}) ->
    pns:whereis(vnode, {Hand, Addr}).
@@ -210,43 +199,26 @@ lookup({Hand,  Addr, _, _}) ->
 ensure({_Hand, Addr, _, _}) ->
    pts:ensure(vnode, Addr).
 
-
-%%
-%% request is failed
-req_failed(Error, #{pool := Pool, pipe := Pipe}) ->
-   pipe:a(Pipe, Error),
-   pq:release(Pool),
-   #{}.
-
-%%
-%% request is completed
-req_success(Value, #{pool := Pool, pipe := Pipe, t := T}) ->
-   _ = tempus:cancel(T),
-   pipe:a(Pipe, Value),
-   pq:release(Pool),
-   #{}.
-
 %%
 %% request service from vnode executed locally
-req_self_vnode(#{vnode := Vnode, req := Req, t := T0}=State) ->
-   ?DEBUG("ambit [coord]: cast ~p ~p", [Vnode, Req]),
-   Pid = lookup(Vnode),
-   Tx  = pipe:cast(Pid, {Vnode, Req}),
-   T   = tempus:timer(T0, timeout),
-   State#{tx => Tx, t => T}.
+req_this_vnode(Req) ->
+   Vnode = hd(ambit_req:peers(Req)),
+   Tx    = ambit_coordinator:cast(Vnode, Req),
+   {[{Tx, Vnode}], ambit_req:t(timeout, Req)}.
+
 
 %%
 %% request service from vnode executed remotely
-req_peer_vnode(#{peers := Peers, req := Req, t := T0}=State) ->
-   Tx = lists:map(
+req_peer_vnode(Req) ->
+   List = lists:map(
       fun(Vnode) ->
-         ?DEBUG("ambit [coord]: cast ~p ~p", [Vnode, Req]),
-         ambit_coordinator:cast(Vnode, Req)
+         Tx = ambit_coordinator:cast(Vnode, ambit_req:new(Req)),
+         {Tx, Vnode}
       end,
-      Peers
+      tl(ambit_req:peers(Req))
    ),
-   T   = tempus:timer(T0, timeout),
-   State#{tx => Tx, t => T}.
+   {List, ambit_req:t(timeout, Req)}.
+
 
 
 

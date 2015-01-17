@@ -81,10 +81,10 @@ handle(_, _Tx, State) ->
 create(Mode, Name, Service, #{addr := Addr, sup := Sup}) ->
    case supervisor:start_child(Sup, ?CHILD(Mode, Addr, Name, Service)) of
       {ok, Pid} ->
-         {ok, ambit_actor:process(Pid)};
+         ok;
 
       {error, {already_started, Pid}} ->
-         {ok, ambit_actor:process(Pid)};
+         ok;
 
       Error ->
          Error

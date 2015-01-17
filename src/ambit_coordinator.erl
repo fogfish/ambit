@@ -15,7 +15,6 @@
   ,domestic/3
   ,foreign/3
    % api
-  % ,bind/1
   ,call/2
   ,cast/2
 ]).
@@ -68,34 +67,6 @@ cast({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
    {Pid, Req1} = ambit_req:whois(Vnode, Req0),
    {UoW, Req2} = ambit_req:lease(Pid,   Req1),
    pipe:cast(UoW, Req2).
-
-% * global cast as coordinator and domestic-only cast (local)
-% * todo lease multiple services from same pool
-
-
-% %%
-% %% bind process to foreign coordinator
-% -spec(bind/1 :: (ek:vnode()) -> any()).
-
-% bind({_, _, _, Pid}) ->
-%    pq:lease(Pid).
-
-
-
-% call(Vnode, Key, Req) ->
-%    call(Vnode, Key, Req, 5000).
-
-% call(Vnode, Key, Req, Timeout) ->
-%    Tx = bind(Vnode),
-%    try
-%       pipe:call(pq:pid(Tx), {call, Vnode, Key, Req, Timeout}, Timeout) 
-%    after
-%       pq:release(Tx)
-%    end.
-
-% %%
-% %%
-
 
 %%%----------------------------------------------------------------------------   
 %%%

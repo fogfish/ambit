@@ -54,20 +54,25 @@ handle({{handoff, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
    pipe:a(Pipe, create(handoff, Name, Service, State)),
    {next_state, handle, State};
 
-% handle({spawn, {primary, _, _, _}=Vnode, Pid, Name, Service}, _, State) ->
-%    ambit_peer:send(Pid, {Vnode, create(primary, Name, Service, State)}),
-%    {next_state, handle, State};
+handle({{primary, _, _, _}, {free, Name}}, Pipe, State) ->
+   pipe:a(Pipe, destroy(Name, State)),
+   {next_state, handle, State};
 
-% handle({spawn, {handoff, _, _, _}=Vnode, Pid, Name, Service}, _, State) ->
-%    ambit_peer:send(Pid, {Vnode, create(handoff, Name, Service, State)}),
-%    {next_state, handle, State};
+handle({{handoff, _, _, _}, {free, Name}}, Pipe, State) ->
+   pipe:a(Pipe, destroy(Name, State)),
+   {next_state, handle, State};
 
-% handle({free,  Vnode, Pid, Name}, _, State) ->
-%    ambit_peer:send(Pid, {Vnode, destroy(Name, State)}),
-%    {next_state, handle, State};
+handle({{primary, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
+   pipe:a(Pipe, pns:whereis(ambit, {Addr, Name})),
+   {next_state, handle, State};
+
+handle({{handoff, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
+   pipe:a(Pipe, pns:whereis(ambit, {Addr, Name})),
+   {next_state, handle, State};
 
 handle(_, _Tx, State) ->
    {next_state, handle, State}.
+
 
 
 %%%----------------------------------------------------------------------------   

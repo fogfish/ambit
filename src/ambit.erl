@@ -34,54 +34,20 @@ spawn(Name, Service) ->
 -spec(free/1 :: (any()) -> ok | {error, any()}).
 
 free(Name) ->
-   Ref = pq:lease(ambit_req),
-   try
-      pipe:call(pq:pid(Ref), 
-         {all, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {free, Vnode, self(), Name}) end})
-   after
-      pq:release(Ref)
-   end.
+   ambit_coordinator:call(Name, ambit_req:new({free, Name})).
 
 %%
 %% lookup pids associated with given service
 -spec(whereis/1 :: (any()) -> [pid()]).
 
 whereis(Name) ->
-   Ref = pq:lease(ambit_req),
-   try
-      {ok, List} = pipe:call(pq:pid(Ref), 
-         {any, Name, fun(Vnode) -> ambit_peer:cast(Vnode, {whereis, self(), Name}) end}),
-      [X || X <- List, is_pid(X)]
-   after
-      pq:release(Ref)
-   end.
-
-% %%
-% %% lookup coordinator node for given key
-% -spec(whois/1 :: (any()) -> ek:vnode()).
-
-% whois(Key) ->
-%    List = ek:successors(ambit, Key),
-%    head(
-%       lists:dropwhile(
-%          fun({X, _, _, _}) -> X =/= primary end, 
-%          List
-%       ),
-%       List
-%    ).
+   ambit_coordinator:call(Name, ambit_req:new({whereis, Name})).
 
 %%%----------------------------------------------------------------------------   
 %%%
 %%% private
 %%%
 %%%----------------------------------------------------------------------------   
-
-% %%
-% %% may be head
-% head([Head | _], _) ->
-%    Head;
-% head(_, [Head | _]) ->
-%    Head.
 
 
 

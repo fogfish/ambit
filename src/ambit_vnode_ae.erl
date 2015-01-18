@@ -33,8 +33,8 @@ init([{_, Addr, Node, Peer}=Vnode, Sup]) ->
    {ok, idle, 
       #{
          vnode => {ae, Addr, Node, Peer},
-         sup   => Sup,
-         t     => tempus:timer(?CONFIG_CYCLE_AE, reconcile)
+         sup   => Sup %,
+         % t     => tempus:timer(?CONFIG_CYCLE_AE, reconcile)
       }
    }.
 

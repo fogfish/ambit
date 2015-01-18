@@ -28,13 +28,19 @@
 -spec(new/1 :: (any()) -> req()).
 
 new(#{msg := Msg, t := T}) ->
-   #{msg => Msg, t => T};
+   new(vnode, Msg, T);
 
 new(Msg) ->
    new(Msg, 5000).
 
-new(Msg, Timeout) ->
-   new(erlang:element(1, Msg), Msg, Timeout).
+new(Msg, Timeout)
+ when is_integer(Timeout) ->
+   new(erlang:element(1, Msg), Msg, Timeout);
+new(vnode, Msg) ->
+   new(vnode, Msg, 5000).
+
+new(vnode, Msg, T) ->
+   #{msg => Msg, t => T};
 
 new(spawn, Msg, T) ->
    #{mod => ambit_req_spawn, msg => Msg, t => T};
@@ -112,8 +118,8 @@ whois(Key, Req) ->
 %% lease unit of work to handle request
 -spec(lease/2 :: (pid(), req()) -> {pid(), req()}).
 
-lease(Pool, Req) ->
-   UoW = pq:lease(Pool),
+lease(Peer, Req) ->
+   UoW = ambit_peer:coordinator(Peer),
    {pq:pid(UoW), Req#{uow => UoW}}.
 
 %%

@@ -67,32 +67,32 @@ active({handoff, Vnode}, _, #{vnode := Self, sup := Sup}=State) ->
       }
    };
 
-active(Msg, _, State) ->
-   ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
+active(_Msg, _, State) ->
+   ?WARNING("ambit [vnode]: unexpected message ~p", [_Msg]),
    {next_state, active, State}.
 
 %%
 %% @todo: transfer as node service with queue
-transfer(transfer, _, #{vnode := Vnode, processes := {}}=State) ->
-   ?NOTICE("ambit [vnode]: handoff ~p completed", [Vnode]),
+transfer(transfer, _, #{vnode := _Vnode, processes := {}}=State) ->
+   ?NOTICE("ambit [vnode]: handoff ~p completed", [_Vnode]),
    {stop, normal, State};
 
 transfer(transfer, _, #{target := Vnode, processes := Processes}=State) ->
    {Name, Act} = q:head(Processes),
    Service     = ambit_actor:service(Act),
    ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
-   ambit_peer:cast(Vnode, {spawn, Vnode, self(), Name, Service}),
-   {next_state, transfer, State, 5000}; %% @todo: config
+   Tx = ambit_coordinator:cast(Vnode, ambit_req:new(vnode, {spawn, Name, Service})),
+   {next_state, transfer, State#{tx => Tx}, 5000}; %% @todo: config
 
-transfer({Vnode, {ok, _}}, _, #{target := Vnode, processes := Processes}=State) ->
+transfer({Tx, ok}, _, #{tx := Tx, processes := Processes}=State) ->
    erlang:send(self(), transfer),
    {next_state, transfer, State#{processes => q:tail(Processes)}};
 
-transfer({Vnode,  _Error}, _, #{target := Vnode}=State) ->
+transfer({Tx,  _Error}, _, #{tx := Tx}=State) ->
    erlang:send_after(1000, self(), transfer),
    {next_state, transfer, State};
 
-transfer(timeout, _, #{target := Vnode}=State) ->
+transfer(timeout, _, State) ->
    erlang:send_after(1000, self(), transfer),
    {next_state, transfer, State};
 

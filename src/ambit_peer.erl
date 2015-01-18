@@ -11,8 +11,11 @@
   ,free/2
   ,ioctl/2
   ,handle/3
-  ,send/2
-  ,cast/2
+   %% interface
+  ,coordinator/1
+
+  % ,send/2
+  % ,cast/2
   % ,call/2
   % ,call/3
   % ,cast/2
@@ -34,14 +37,18 @@ start_link() ->
    pipe:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-   {ok,   _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
-   {ok, Pid} = pq:start_link([
+   {ok,    _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
+   {ok, Pool} = pq:start_link([
       {type,     reusable}     
      ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, thing)}    
      ,{worker,   ambit_coordinator}    
    ]),
-   ok = ek:join(ambit, scalar:s(erlang:node()), Pid),
-   {ok, handle, #{}}.
+   ok = ek:join(ambit, scalar:s(erlang:node()), self()),
+   {ok, handle, 
+      #{
+         pool => Pool 
+      }
+   }.
 
 free(_, _) ->
    ok.
@@ -56,16 +63,24 @@ ioctl(_, _) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% send async message to v-node
-send({_, _, _, Pid}=Vnode, Msg) ->
-   pipe:send(Pid, {send, Vnode, Msg});
-send(Pid, Msg) ->
-   pipe:send(Pid, Msg).
+%% request coordinator 
+-spec(coordinator/1 :: (pid()) -> any()).
 
-%%
-%% cast async message to v-node (ensure v-node presence)
-cast({_, _, _, Pid}=Vnode, Msg) ->
-   pipe:send(Pid, {cast, Vnode, Msg}).
+coordinator(Peer) ->
+   pipe:call(Peer, coordinator, infinity).
+
+
+% %%
+% %% send async message to v-node
+% send({_, _, _, Pid}=Vnode, Msg) ->
+%    pipe:send(Pid, {send, Vnode, Msg});
+% send(Pid, Msg) ->
+%    pipe:send(Pid, Msg).
+
+% %%
+% %% cast async message to v-node (ensure v-node presence)
+% cast({_, _, _, Pid}=Vnode, Msg) ->
+%    pipe:send(Pid, {cast, Vnode, Msg}).
 
 
 % %%
@@ -109,33 +124,41 @@ cast({_, _, _, Pid}=Vnode, Msg) ->
 
 %%
 %%
-handle({send, Vnode, Msg}, Pipe, State) ->
-   case lookup(Vnode) of
-      %% no route to vnode
-      undefined ->
-         pipe:a(Pipe, unreachable),
-         {next_state, handle, State};
-      Pid       ->
-         pipe:send(Pid, Msg),
-         {next_state, handle, State}
-   end;
-
-handle({cast, {primary, Addr, _, _}=Vnode, {whereis, Pid, Name}}, _Pipe, State) ->
-   pipe:send(Pid, {Vnode, {ok, pns:whereis(ambit, {Addr, Name})}}),
+handle(coordinator, Pipe, #{pool := Pool} = State) ->
+   pipe:ack(Pipe,
+      pq:lease(Pool, [{tenant, pipe:a(Pipe)}])
+   ),
    {next_state, handle, State};
 
-handle({cast, {handoff, Addr, _, _}=Vnode, {whereis, Pid, Name}}, _Pipe, State) ->
-   pipe:send(Pid, {Vnode, {ok, undefined}}),
-   {next_state, handle, State};
+% %%
+% %%
+% handle({send, Vnode, Msg}, Pipe, State) ->
+%    case lookup(Vnode) of
+%       %% no route to vnode
+%       undefined ->
+%          pipe:a(Pipe, unreachable),
+%          {next_state, handle, State};
+%       Pid       ->
+%          pipe:send(Pid, Msg),
+%          {next_state, handle, State}
+%    end;
 
-handle({cast, Vnode, Msg}, _Pipe, State) ->
-   case ensure(Vnode) of
-      {ok,    _} ->
-         pipe:send(lookup(Vnode), Msg),
-         {next_state, handle, State};
-      {error, _} ->
-         {next_state, handle, State}
-   end;
+% handle({cast, {primary, Addr, _, _}=Vnode, {whereis, Pid, Name}}, _Pipe, State) ->
+%    pipe:send(Pid, {Vnode, {ok, pns:whereis(ambit, {Addr, Name})}}),
+%    {next_state, handle, State};
+
+% handle({cast, {handoff, Addr, _, _}=Vnode, {whereis, Pid, Name}}, _Pipe, State) ->
+%    pipe:send(Pid, {Vnode, {ok, undefined}}),
+%    {next_state, handle, State};
+
+% handle({cast, Vnode, Msg}, _Pipe, State) ->
+%    case ensure(Vnode) of
+%       {ok,    _} ->
+%          pipe:send(lookup(Vnode), Msg),
+%          {next_state, handle, State};
+%       {error, _} ->
+%          {next_state, handle, State}
+%    end;
 
 % %%
 % %% handshake vnode service  
@@ -168,6 +191,7 @@ handle({join, Peer, Pid}, _Tx, State) ->
    ?NOTICE("ambit [peer]: join ~s", [Peer]),
    lists:foreach(
       fun({Addr, _}) ->
+         % @todo: relocate node only if "out of candidate list" 
          case pns:whereis(vnode, Addr) of
             undefined ->
                ok;
@@ -195,15 +219,15 @@ handle(Msg, Pipe, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%% lookup v-node hand
-lookup({Hand, Addr, _, _}) ->
-   pns:whereis(vnode, {Hand, Addr}).
+% %%
+% %% lookup v-node hand
+% lookup({Hand, Addr, _, _}) ->
+%    pns:whereis(vnode, {Hand, Addr}).
 
-%%
-%% ensure v-node
-ensure({_Hand, Addr, _, _}) ->
-   pts:ensure(vnode, Addr).
+% %%
+% %% ensure v-node
+% ensure({_Hand, Addr, _, _}) ->
+%    pts:ensure(vnode, Addr).
 
 
 

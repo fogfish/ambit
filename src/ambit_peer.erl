@@ -43,9 +43,11 @@ init(_) ->
      ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, thing)}    
      ,{worker,   ambit_coordinator}    
    ]),
-   ok = ek:join(ambit, scalar:s(erlang:node()), self()),
+   Node = scalar:s(erlang:node()),
+   ok   = ek:join(ambit, Node, self()),
    {ok, handle, 
       #{
+         node => Node,
          pool => Pool 
       }
    }.
@@ -186,17 +188,26 @@ handle(coordinator, Pipe, #{pool := Pool} = State) ->
 
 %%
 %%
-handle({join, Peer, Pid}, _Tx, State) ->
+handle({join, Peer, Pid}, _Tx, #{node := Node} = State) ->
    %% new node joined cluster, relocate vnode
    ?NOTICE("ambit [peer]: join ~s", [Peer]),
    lists:foreach(
       fun({Addr, _}) ->
-         % @todo: relocate node only if "out of candidate list" 
          case pns:whereis(vnode, Addr) of
+            %% vnode is not executed by local node, do nothing 
             undefined ->
                ok;
+
+            %% vnode needs to be relocated if local node is not in candidate list   
             X ->
-               pipe:send(X, {handoff, {primary, Addr, Peer, Pid}})
+               case 
+                  lists:keyfind(Node, 3, ek:successors(ambit, Addr - 1))
+               of
+                  false ->
+                     pipe:send(X, {handoff, {primary, Addr, Peer, Pid}});
+                  _     ->
+                     ok
+               end
          end
       end,
       ek:whois(ambit, Peer)

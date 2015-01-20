@@ -13,7 +13,7 @@
    peers/1,
 
    t/2,
-   % message/1,
+   payload/1,
 
    whois/2,
    lease/2,
@@ -27,20 +27,12 @@
 %%
 -spec(new/1 :: (any()) -> req()).
 
-new(#{msg := Msg, t := T}) ->
-   new(vnode, Msg, T);
-
 new(Msg) ->
    new(Msg, 5000).
 
 new(Msg, Timeout)
  when is_integer(Timeout) ->
-   new(erlang:element(1, Msg), Msg, Timeout);
-new(vnode, Msg) ->
-   new(vnode, Msg, 5000).
-
-new(vnode, Msg, T) ->
-   #{msg => Msg, t => T};
+   new(erlang:element(1, Msg), Msg, Timeout).
 
 new(spawn, Msg, T) ->
    #{mod => ambit_req_spawn, msg => Msg, t => T};
@@ -86,6 +78,14 @@ peers(#{peer := Peers}) ->
    Peers.
 
 %%
+%% return request payload
+-spec(payload/1 :: (req()) -> [ek:vnode()]).
+
+payload(#{msg := Payload}) ->
+   Payload.
+
+
+%%
 %% set timeout
 t(Msg, #{t := Timeout} = Req) ->
    Req#{t => tempus:timer(Msg, Timeout)}.
@@ -94,9 +94,6 @@ t(Msg, #{t := Timeout} = Req) ->
 %%
 %% who is responsible to coordinate key and execute request
 -spec(whois/2 :: (any(), req()) -> {pid(), req()}).
-
-whois({_, _, _, Pid} = Vnode, Req) ->
-   {Pid, Req#{peer => [Vnode]}};
 
 whois(Key, Req) ->
    %% @todo filter unique nodes

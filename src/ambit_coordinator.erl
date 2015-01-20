@@ -11,13 +11,10 @@
   ,free/2
   ,ioctl/2
   ,idle/3
-  ,local/3
   ,domestic/3
   ,foreign/3
    % api
   ,call/2
-  ,cast/2
-  ,send/2
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -50,35 +47,10 @@ ioctl(_, _) ->
 -spec(call/2 :: (any(), any()) -> {ok, any()} | {error, any()}).
 
 call(Key, Req0) ->
-   {Pid, Req1} = ambit_req:whois(Key, Req0),
-   {UoW, Req2} = ambit_req:lease(Pid, Req1),
-   pipe:call(UoW, Req2).
-
-%%
-%% cast message to coordinator
--spec(cast/2 :: (ek:vnode(), any()) -> reference()).
-
-cast({_, _, _, Pid} = Vnode, #{msg := Msg})
- when erlang:node(Pid) =:= erlang:node() ->
-   ?DEBUG("ambit [coord]: cast ~p ~p", [Msg, Vnode]),
-   % pipe:cast(lookup(Vnode), {Vnode, Msg});
-   pipe:cast(lookup(Vnode), Msg);
-
-cast({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
-   ?DEBUG("ambit [coord]: cast ~p ~p", [_Msg, Vnode]),
-   {Pid, Req1} = ambit_req:whois(Vnode, Req0),
-   {UoW, Req2} = ambit_req:lease(Pid,   Req1),
-   pipe:cast(UoW, Req2).
-
-%%
-%% send message to coordinator
--spec(send/2 :: (ek:vnode(), any()) -> ok).
-
-send({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
-   ?DEBUG("ambit [coord]: send ~p ~p", [_Msg, Vnode]),
-   {Pid, Req1} = ambit_req:whois(Vnode, Req0),
-   {UoW, Req2} = ambit_req:lease(Pid,   Req1),
-   pipe:cast(UoW, Req2).
+   Req1 = ambit_req:new(Req0),
+   {Pid, Req2} = ambit_req:whois(Key, Req1),
+   {UoW, Req3} = ambit_req:lease(Pid, Req2),
+   pipe:call(UoW, Req3).
 
 
 %%%----------------------------------------------------------------------------   
@@ -89,26 +61,12 @@ send({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
 
 %%
 %%
-idle(#{mod := _, msg := _Msg} = Req0, Pipe, _State) ->
+idle(#{msg := _Msg} = Req0, Pipe, _State) ->
    ?DEBUG("ambit [coord]: global req ~p", [_Msg]),
    case ensure(ambit_req:vnode(Req0)) of
       {ok, _} ->
-         %% @todo: validate quorum
+         %% @todo: validate quorum N + W property
          {next_state, domestic, 
-            req_this_vnode(ambit_req:pipe(Pipe, Req0))
-         };
-      {error, _} = Error ->
-         {_, Req1} = ambit_req:accept(Error, 
-            ambit_req:pipe(Pipe, Req0)
-         ),
-         {next_state, idle, ambit_req:free(Req1)}
-   end;
-
-idle(#{msg := _Msg} = Req0, Pipe, _State) ->
-   ?DEBUG("ambit [coord]: local req ~p", [_Msg]),
-   case ensure(ambit_req:vnode(Req0)) of
-      {ok, _} ->
-         {next_state, local, 
             req_this_vnode(ambit_req:pipe(Pipe, Req0))
          };
       {error, _} = Error ->
@@ -122,19 +80,6 @@ idle(_, _, State) ->
    {next_state, idle, State}.
 
 %%
-%%
-local({Tx, Value}, _, {[{Tx, _Vnode}], Req0}) ->
-   Req1 = ambit_req:accept(Value, Req0),
-   {next_state, idle, ambit_req:free(Req1)};
-
-% local(timeout, _, State) ->
-%    {stop, timeout, req_commit({error, timeout}, State)};
-
-local(_, _, State) ->
-   {next_state, idle, State}.
-
-
-%%
 %% execute domestic 
 domestic({Tx, Value}, _,  {[{Tx, Vnode}], Req0}) ->
    Req1 = ambit_req:accept(Value, Req0),
@@ -145,8 +90,9 @@ domestic({Tx, Value}, _,  {[{Tx, Vnode}], Req0}) ->
          {next_state, foreign, req_peer_vnode(Req1)}
    end;
 
-% domestic(timeout, _, State) ->
-%    {stop, timeout, State};
+domestic(timeout, _, {_, Req0}) ->
+   Req1 = ambit_req:accept({error, timeout}, Req0),
+   {stop, normal, ambit_req:free(Req1)};
 
 domestic(_, _, State) ->
    {next_state, idle, State}.
@@ -161,6 +107,10 @@ foreign({Tx, Value}, _, {List, Req0}) ->
       {value, {_Tx, _Vnode}, Tail} ->
          {next_state, foreign, {Tail, Req1}}
    end;
+
+foreign(timeout, _, {_, Req0}) ->
+   Req1 = ambit_req:accept({error, timeout}, Req0),
+   {stop, normal, ambit_req:free(Req1)};
 
 foreign(_, _, State) ->
    {next_state, foreign, State}.
@@ -186,7 +136,7 @@ ensure({_Hand, Addr, _, _}) ->
 %% request service from vnode executed locally
 req_this_vnode(Req) ->
    Vnode = hd(ambit_req:peers(Req)),
-   Tx    = ambit_coordinator:cast(Vnode, Req),
+   Tx    = pipe:cast(lookup(Vnode), ambit_req:payload(Req)),
    {[{Tx, Vnode}], ambit_req:t(timeout, Req)}.
 
 
@@ -195,7 +145,7 @@ req_this_vnode(Req) ->
 req_peer_vnode(Req) ->
    List = lists:map(
       fun(Vnode) ->
-         Tx = ambit_coordinator:cast(Vnode, ambit_req:new(Req)),
+         Tx = ambit_peer:cast(Vnode, ambit_req:payload(Req)),
          {Tx, Vnode}
       end,
       tl(ambit_req:peers(Req))

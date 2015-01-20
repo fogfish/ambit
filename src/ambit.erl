@@ -27,21 +27,21 @@ start() ->
 -spec(spawn/2 :: (any(), any()) -> {ok, [pid()]} | {error, any()}).
 
 spawn(Name, Service) ->
-   ambit_coordinator:call(Name, ambit_req:new({spawn, Name, Service})).
+   ambit_coordinator:call(Name, {spawn, Name, Service}).
 
 %%
 %% free service on the cluster
 -spec(free/1 :: (any()) -> ok | {error, any()}).
 
 free(Name) ->
-   ambit_coordinator:call(Name, ambit_req:new({free, Name})).
+   ambit_coordinator:call(Name, {free, Name}).
 
 %%
 %% lookup pids associated with given service
 -spec(whereis/1 :: (any()) -> [pid()]).
 
 whereis(Name) ->
-   ambit_coordinator:call(Name, ambit_req:new({whereis, Name})).
+   ambit_coordinator:call(Name, {whereis, Name}).
 
 %%%----------------------------------------------------------------------------   
 %%%

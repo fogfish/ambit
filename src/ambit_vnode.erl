@@ -1,5 +1,5 @@
 %% @description
-%%   virtual node process
+%%   virtual node coordinator process
 -module(ambit_vnode).
 -behaviour(pipe).
 
@@ -10,8 +10,8 @@
   ,init/1
   ,free/2
   ,ioctl/2
-  ,active/3
-  ,transfer/3
+  ,active/3   % -> primary/3
+  ,transfer/3 % -> handoff/3
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -72,7 +72,7 @@ active(_Msg, _, State) ->
    {next_state, active, State}.
 
 %%
-%% @todo: transfer as node service with queue
+%%
 transfer(transfer, _, #{vnode := _Vnode, processes := {}}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p completed", [_Vnode]),
    {stop, normal, State};
@@ -81,7 +81,7 @@ transfer(transfer, _, #{target := Vnode, processes := Processes}=State) ->
    {Name, Act} = q:head(Processes),
    Service     = ambit_actor:service(Act),
    ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
-   Tx = ambit_coordinator:cast(Vnode, ambit_req:new(vnode, {spawn, Name, Service})),
+   Tx = ambit_peer:cast(Vnode, {spawn, Name, Service}),
    {next_state, transfer, State#{tx => Tx}, 5000}; %% @todo: config
 
 transfer({Tx, ok}, _, #{tx := Tx, processes := Processes}=State) ->
@@ -99,7 +99,6 @@ transfer(timeout, _, State) ->
 transfer(Msg, _, State) ->
    ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
    {next_state, transfer, State}.
-
 
 %%%----------------------------------------------------------------------------   
 %%%

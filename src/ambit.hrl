@@ -39,7 +39,6 @@
 -endif.
 
 
-
 %% 
 %% logger macros
 %%   debug, info, notice, warning, error, critical, alert, emergency

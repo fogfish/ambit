@@ -91,13 +91,13 @@ handle(coordinator, Pipe, #{pool := Pool} = State) ->
    ),
    {next_state, handle, State};
 
-handle({cast, {Hand, Addr, _, _}, Msg}, Pipe, State) ->
-   case pts:ensure(vnode, Addr) of
+handle({cast, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
+   case ensure(Node, Addr) of
       {ok,    _} ->
-         pipe:emit(Pipe, pns:whereis(vnode, {Hand, Addr}), Msg),
+         pipe:emit(Pipe, lookup(Vnode), Msg),
          {next_state, handle, State};
-      {error, _} ->
-         pipe:a(Pipe, unreachable),
+      {error, _} = Error ->
+         pipe:a(Pipe, Error),
          {next_state, handle, State}
    end;
 
@@ -142,9 +142,7 @@ handle({join, Peer, Pid}, _Tx, #{node := Node} = State) ->
 
 % handle({leave, _Peer}) ->
 
-handle(Msg, Pipe, State) ->
-   io:format("==> ~p ~p~n", [Msg, Pipe]),
-   pipe:a(Pipe, Msg),
+handle(_Msg, _Pipe, State) ->
    {next_state, handle, State}.
 
 
@@ -153,4 +151,26 @@ handle(Msg, Pipe, State) ->
 %%% private
 %%%
 %%%----------------------------------------------------------------------------   
+
+%%
+%% ensure vnode is running
+ensure(Node, Addr) ->
+   case pns:whereis(vnode, Addr) of
+      %% vnode is not running but it can be created only if addr is manageable by peer 
+      undefined ->
+         case lists:keyfind(Node, 3, ek:successors(ambit, Addr)) of
+            false ->
+               {error,  eaddrnotavail};
+            _     ->
+               pts:ensure(vnode, Addr)
+         end;
+      Vnode     ->
+         {ok, Vnode}
+   end.
+
+%%
+%% lookup service hand of given Vnode
+lookup({Hand,  Addr, _, _}) ->
+   pns:whereis(vnode, {Hand, Addr}).
+
 

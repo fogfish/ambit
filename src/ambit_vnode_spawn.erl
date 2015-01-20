@@ -79,7 +79,7 @@ handle(_, _Tx, State) ->
 
 %%
 %%
-create(Mode, Name, Service, #{addr := Addr, sup := Sup}) ->
+create(Mode, Name, Service, #{addr := Addr, sup := Sup}=State) ->
    case supervisor:start_child(Sup, ?CHILD(Mode, Addr, Name, Service)) of
       {ok, Pid} ->
          ok;
@@ -93,7 +93,7 @@ create(Mode, Name, Service, #{addr := Addr, sup := Sup}) ->
 
 %%
 %%
-destroy(Name, #{sup := Sup}) ->
+destroy(Name, #{addr := Addr, sup := Sup}=State) ->
    supervisor:terminate_child(Sup, Name),
    case supervisor:delete_child(Sup, Name) of
       ok ->
@@ -105,6 +105,3 @@ destroy(Name, #{sup := Sup}) ->
       Error ->
          Error
    end.
-
-
-

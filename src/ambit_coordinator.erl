@@ -17,6 +17,7 @@
    % api
   ,call/2
   ,cast/2
+  ,send/2
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -60,13 +61,25 @@ call(Key, Req0) ->
 cast({_, _, _, Pid} = Vnode, #{msg := Msg})
  when erlang:node(Pid) =:= erlang:node() ->
    ?DEBUG("ambit [coord]: cast ~p ~p", [Msg, Vnode]),
-   pipe:cast(lookup(Vnode), {Vnode, Msg});
+   % pipe:cast(lookup(Vnode), {Vnode, Msg});
+   pipe:cast(lookup(Vnode), Msg);
 
 cast({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
    ?DEBUG("ambit [coord]: cast ~p ~p", [_Msg, Vnode]),
    {Pid, Req1} = ambit_req:whois(Vnode, Req0),
    {UoW, Req2} = ambit_req:lease(Pid,   Req1),
    pipe:cast(UoW, Req2).
+
+%%
+%% send message to coordinator
+-spec(send/2 :: (ek:vnode(), any()) -> ok).
+
+send({_, _, _, Pid} = Vnode, #{msg := _Msg} = Req0) ->
+   ?DEBUG("ambit [coord]: send ~p ~p", [_Msg, Vnode]),
+   {Pid, Req1} = ambit_req:whois(Vnode, Req0),
+   {UoW, Req2} = ambit_req:lease(Pid,   Req1),
+   pipe:cast(UoW, Req2).
+
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -95,7 +108,7 @@ idle(#{msg := _Msg} = Req0, Pipe, _State) ->
    ?DEBUG("ambit [coord]: local req ~p", [_Msg]),
    case ensure(ambit_req:vnode(Req0)) of
       {ok, _} ->
-         {next_state, domestic, 
+         {next_state, local, 
             req_this_vnode(ambit_req:pipe(Pipe, Req0))
          };
       {error, _} = Error ->
@@ -110,8 +123,8 @@ idle(_, _, State) ->
 
 %%
 %%
-local({Tx, Value}, _, #{tx := Tx}=Req0) ->
-   {_, Req1} = ambit_req:accept(Value, Req0),
+local({Tx, Value}, _, {[{Tx, _Vnode}], Req0}) ->
+   Req1 = ambit_req:accept(Value, Req0),
    {next_state, idle, ambit_req:free(Req1)};
 
 % local(timeout, _, State) ->
@@ -149,8 +162,7 @@ foreign({Tx, Value}, _, {List, Req0}) ->
          {next_state, foreign, {Tail, Req1}}
    end;
 
-foreign(M, _, State) ->
-   io:format("=> ~p~n", [M]),
+foreign(_, _, State) ->
    {next_state, foreign, State}.
 
 

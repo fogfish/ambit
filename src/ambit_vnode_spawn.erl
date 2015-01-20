@@ -46,27 +46,23 @@ ioctl(_, _) ->
 
 %%
 %%
-handle({{primary, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
+% handle({{primary, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
+% handle({{handoff, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
+handle({spawn, Name, Service}, Pipe, State) ->
    pipe:a(Pipe, create(primary, Name, Service, State)),
    {next_state, handle, State};
 
-handle({{handoff, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
-   pipe:a(Pipe, create(handoff, Name, Service, State)),
-   {next_state, handle, State};
-
-handle({{primary, _, _, _}, {free, Name}}, Pipe, State) ->
+%%
+% handle({{primary, _, _, _}, {free, Name}}, Pipe, State) ->
+% handle({{handoff, _, _, _}, {free, Name}}, Pipe, State) ->
+handle({free, Name}, Pipe, State) ->
    pipe:a(Pipe, destroy(Name, State)),
    {next_state, handle, State};
 
-handle({{handoff, _, _, _}, {free, Name}}, Pipe, State) ->
-   pipe:a(Pipe, destroy(Name, State)),
-   {next_state, handle, State};
-
-handle({{primary, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
-   pipe:a(Pipe, pns:whereis(ambit, {Addr, Name})),
-   {next_state, handle, State};
-
-handle({{handoff, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
+%%
+% handle({{primary, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
+% handle({{handoff, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
+handle({whereis, Name}, Pipe, #{addr := Addr} = State) ->
    pipe:a(Pipe, pns:whereis(ambit, {Addr, Name})),
    {next_state, handle, State};
 

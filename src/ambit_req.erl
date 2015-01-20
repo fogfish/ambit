@@ -99,6 +99,7 @@ whois({_, _, _, Pid} = Vnode, Req) ->
    {Pid, Req#{peer => [Vnode]}};
 
 whois(Key, Req) ->
+   %% @todo filter unique nodes
    Peers = ek:successors(ambit, Key),
    case lists:dropwhile(fun({X, _, _, _}) -> X =/= primary end, Peers) of
       [] ->

@@ -13,6 +13,8 @@
   ,handle/3
    %% interface
   ,coordinator/1
+  ,cast/2
+  ,send/2
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -59,6 +61,21 @@ ioctl(_, _) ->
 coordinator(Peer) ->
    pipe:call(Peer, coordinator, infinity).
 
+%%
+%% cast message to vnode
+-spec(cast/2 :: (ek:vnode(), any()) -> reference()).
+
+cast({_, _, _, Pid} = Vnode, Msg) ->
+   pipe:cast(Pid, {cast, Vnode, Msg}).
+
+%%
+%% send message to vnode
+-spec(send/2 :: (ek:vnode(), any()) -> ok).
+
+send({_, _, _, Pid} = Vnode, Msg) ->
+   pipe:send(Pid, {send, Vnode, Msg}).
+
+
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -73,6 +90,25 @@ handle(coordinator, Pipe, #{pool := Pool} = State) ->
       pq:lease(Pool, [{tenant, pipe:a(Pipe)}])
    ),
    {next_state, handle, State};
+
+handle({cast, {Hand, Addr, _, _}, Msg}, Pipe, State) ->
+   case pts:ensure(vnode, Addr) of
+      {ok,    _} ->
+         pipe:emit(Pipe, pns:whereis(vnode, {Hand, Addr}), Msg),
+         {next_state, handle, State};
+      {error, _} ->
+         pipe:a(Pipe, unreachable),
+         {next_state, handle, State}
+   end;
+
+handle({send, {Hand, Addr, _, _}, Msg}, Pipe, State) ->
+   case pns:whereis(vnode, {Hand, Addr}) of
+      undefined ->
+         {next_state, handle, State};
+      Pid ->
+         pipe:emit(Pipe, Pid, Msg),
+         {next_state, handle, State}
+   end;
 
 %%
 %%
@@ -89,7 +125,7 @@ handle({join, Peer, Pid}, _Tx, #{node := Node} = State) ->
             %% vnode needs to be relocated if local node is not in candidate list   
             X ->
                case 
-                  lists:keyfind(Node, 3, ek:successors(ambit, Addr - 1))
+                  lists:keyfind(Node, 3, ek:successors(ambit, Addr))
                of
                   false ->
                      pipe:send(X, {handoff, {primary, Addr, Peer, Pid}});

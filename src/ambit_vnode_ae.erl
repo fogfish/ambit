@@ -33,8 +33,8 @@ init([{_, Addr, Node, Peer}=Vnode, Sup]) ->
    {ok, idle, 
       #{
          vnode => {ae, Addr, Node, Peer},
-         sup   => Sup %,
-         % t     => tempus:timer(?CONFIG_CYCLE_AE, reconcile)
+         sup   => Sup,
+         t     => tempus:timer(?CONFIG_CYCLE_AE, reconcile)
       }
    }.
 
@@ -50,72 +50,76 @@ ioctl(_, _) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
+%% @todo: 
+%%  * globally maintained hash tree
+%%  * handshake delivery root signature (ack / nack based on it)
+
 %%
 %%
-idle(reconcile, _, #{vnode := Vnode}=State) ->
-   erlang:send(self(), handshake),
-   {next_state, handshake, State#{peer => siblings(Vnode)}};
+idle(reconcile, Pipe, #{vnode := Vnode}=State) ->
+   handshake(reconcile, Pipe, State#{peer => siblings(Vnode)});
 
-idle({handshake, Peer}, _, #{vnode := Vnode}=State) ->
-   ?DEBUG("ambit [ae]: ~p -handshake ~p", [Vnode, Peer]),
-   ambit_peer:send(Peer, {Vnode, handshake}),
-   erlang:send(self(), slave),   
-   {next_state, snapshot, State#{peer => Peer}};
+idle(ae_handshake, Pipe, #{vnode := Vnode}=State) ->
+   ?DEBUG("ambit [ae]: -handshake ~p", [Vnode]),
+   pipe:a(Pipe, ae_ack),   
+   snapshot(passive, Pipe, State);
 
-idle(_, _, State) ->
+idle(M, _, State) ->
+   io:format("--> idle ~p~n", [M]),
    {next_state, idle, State}.
 
 
 %%
 %%
-handshake(handshake, _, #{peer := [], t := T}=State) ->
+handshake(reconcile, _, #{peer := [], t := T}=State) ->
    {next_state, idle, State#{t => tempus:timer(T, reconcile)}};
 
-handshake(handshake, _, #{vnode := Vnode, peer := [Peer|_]}=State) ->
-   ambit_peer:cast(Peer, {handshake, Vnode}),
+handshake(reconcile, _, #{vnode := Vnode, peer := [Peer|_]}=State) ->
    % @todo: timeout
+   ambit_peer:cast(Peer, ae_handshake),
    {next_state, handshake, State};
 
-handshake({Peer, handshake}, _, #{vnode := Vnode, peer := [Peer|_]}=State) ->
+handshake({_, ae_ack}, Pipe, #{vnode := Vnode, peer := [Peer|_]}=State) ->
    ?DEBUG("ambit [ae]: ~p +handshake ~p", [Vnode, Peer]),
-   erlang:send(self(), master),
-   {next_state, snapshot, State#{peer => Peer}};
+   snapshot(active, Pipe, State#{peer => Peer});
 
-handshake({Peer, busy}, _, #{peer := [Peer|Peers]}=State) ->
-   erlang:send(self(), handshake),
+handshake({_, unreachable}, _Pipe, #{peer := [_Peer|Peers]}=State) ->
+   erlang:send(self(), reconcile),
    {next_state, handshake, State#{peer => Peers}};
 
-handshake({handshake, Peer}, _, #{vnode := Vnode}=State) ->
-   ambit_peer:send(Peer, {Vnode, busy}),
+handshake(ae_handshake, Pipe, #{vnode := Vnode}=State) ->
+   pipe:a(Pipe, unreachable),
    {next_state, handshake, State};
 
-handshake(_, _, State) ->
+handshake(Msg, Pipe, State) ->
+   io:format("--> handshake ~p ~p~n", [Msg, Pipe]),
    {next_state, handshake, State}.
 
 
 %%
 %% 
-snapshot(master, _, #{peer := {_, Addr, _, _}, sup := Sup}=State) ->
+snapshot(active, Pipe, #{peer := {_, Addr, _, _}, sup := Sup}=State) ->
    %% initiate reconciliation as master
-   erlang:send(self(), init),
-   {next_state, exchange, State#{l => 0, tree => htbuild(Addr, Sup)}};
+   exchange(init, Pipe, State#{l => 0, tree => htbuild(Addr, Sup)});
+   % erlang:send(self(), init),
+   % {next_state, exchange, };
 
-snapshot(slave,  _, #{peer := {_, Addr, _, _}, sup := Sup}=State) ->
+snapshot(passive,  _, #{vnode := {_, Addr, _, _}, sup := Sup}=State) ->
    %% initiate reconciliation as slave
    {next_state, exchange, State#{l => 0, tree => htbuild(Addr, Sup)}};
 
-snapshot({handshake, Peer}, _, #{vnode := Vnode}=State) ->
-   ambit_peer:send(Peer, {Vnode, busy}),
+snapshot(ae_handshake, Pipe, #{vnode := Vnode}=State) ->
+   pipe:a(Pipe, unreachable),
    {next_state, snapshot, State};
 
-snapshot(_, _, State) ->
+snapshot(M, _, State) ->
+   io:format("--> snapshot ~p~n", [M]),
    {next_state, snapshot, State}.
 
 
-
 %%
 %%
-exchange(init, _, #{peer := Peer, l := L, tree := Tree0}=State) ->
+exchange(init, _Pipe, #{l := L, tree := Tree0, peer := Peer}=State) ->
    case htree:hash(L, Tree0) of
       undefined ->
          ambit_peer:send(Peer, htree:hash(Tree0)),
@@ -126,53 +130,54 @@ exchange(init, _, #{peer := Peer, l := L, tree := Tree0}=State) ->
          {next_state, exchange, State}
    end;
 
-exchange({hash, -1, _}=HashA, _, #{peer := Peer, tree := Tree0, sup := Sup}=State) ->
+exchange({hash, -1, _}=HashA, Pipe, #{tree := Tree0, sup := Sup}=State) ->
    HashB = htree:hash(Tree0),
-   ambit_peer:send(Peer, HashB),   
+   pipe:a(Pipe, HashB),   
    Diff = htree:diff(HashA, HashB),
    Tree = htree:evict(Diff, Tree0),
    erlang:send(self(), transfer),   
    {next_state, transfer, State#{processes => q:new([{Name, X} || {Name, X, _, _} <- supervisor:which_children(Sup), htree:lookup(Name, Tree) =/= undefined])}};
 
-exchange({hash,  _, _}=HashA, _, #{peer := Peer, l := L, tree := Tree0}=State) ->
+exchange({hash,  _, _}=HashA, Pipe, #{l := L, tree := Tree0}=State) ->
    case htree:hash(L, Tree0) of
       undefined ->
-         ambit_peer:send(Peer, htree:hash(Tree0)),
+         pipe:a(Pipe, htree:hash(Tree0)),
          {next_state, exchange, State};
 
       HashB     ->
-         ambit_peer:send(Peer, HashB),
+         pipe:a(Pipe, HashB),
          Diff = htree:diff(HashA, HashB),
          Tree = htree:evict(Diff, Tree0),
          {next_state, exchange, State#{l => L + 1, tree => Tree}}          
    end;
 
-exchange({handshake, Peer}, _, #{vnode := Vnode}=State) ->
-   ambit_peer:send(Peer, {Vnode, busy}),
+exchange(ae_handshake, Pipe, #{vnode := Vnode}=State) ->
+   pipe:a(Pipe, unreachable),
    {next_state, exchange, State};
 
-exchange(_, _, State) ->
+exchange(M, _, State) ->
+   io:format("--> exchange ~p~n", [M]),
    {next_state, exchange, State}.
 
 %%
 %%
-transfer(transfer, _, #{peer := Peer, processes := {}, t := T}=State) ->
+transfer(transfer, _Pipe, #{peer := Peer, processes := {}, t := T}=State) ->
    ?NOTICE("ambit [ae]: ~p completed", [Peer]),
    {next_state, idle, State#{t => tempus:timer(T, reconcile)}};
 
-transfer(transfer, _, #{peer := Peer, processes := Processes}=State) ->
+transfer(transfer, _Pipe, #{peer := Peer, processes := Processes}=State) ->
    {Name, Act} = q:head(Processes),
    Service  = ambit_actor:service(Act), 
    ?DEBUG("ambit [ae]: transfer ~p", [Name]),
    P = erlang:setelement(1, Peer, primary),
-   ambit_peer:cast(P, {spawn, P, self(), Name, Service}),
+   ambit_coordinator:cast(P, ambit_req:new(vnode, {spawn, Name, Service})),
    {next_state, transfer, State, 5000}; %% @todo: config
 
-transfer({Vnode, {ok, _}}, _, #{peer := _Vnode, processes := Processes}=State) ->
+transfer({_Tx, ok}, _, #{peer := _Vnode, processes := Processes}=State) ->
    erlang:send(self(), transfer),
    {next_state, transfer, State#{processes => q:tail(Processes)}};
 
-transfer({Vnode,  _Error}, _, #{peer := _Vnode}=State) ->
+transfer({_Tx,  _Error}, _, #{peer := _Vnode}=State) ->
    erlang:send_after(1000, self(), transfer),
    {next_state, transfer, State};
 
@@ -180,11 +185,12 @@ transfer(timeout, _, #{peer := _Vnode}=State) ->
    erlang:send_after(1000, self(), transfer),
    {next_state, transfer, State};
 
-transfer({handshake, Peer}, _, #{vnode := Vnode, t := T}=State) ->
-   ambit_peer:send(Peer, {Vnode, busy}),
+transfer(ae_handshake, Pipe, #{vnode := Vnode, t := T}=State) ->
+   pipe:a(Pipe, unreachable),
    {next_state, transfer, State, 5000};
 
-transfer(_, _, State) ->
+transfer(M, _, State) ->
+   io:format("--> transfer ~p~n", [M]),
    {next_state, transfer, State, 5000}.
 
 
@@ -197,7 +203,7 @@ transfer(_, _, State) ->
 %%
 %% return list of siblings
 siblings({_, Addr, _, _}) ->
-   case siblings1(ek:successors(ambit, Addr)) ++ siblings1(ek:predecessors(ambit, Addr + 1)) of
+   case siblings1(ek:successors(ambit, Addr)) of
       [] ->
          [];
       L  ->
@@ -209,7 +215,7 @@ siblings({_, Addr, _, _}) ->
 siblings1(List) ->
    [{ae, Addr, Node, Peer} || 
       {primary, Addr, Node, Peer} <- List,
-      erlang:node(Peer) =/= erlang:node()].
+      erlang:node(Peer) =/= erlang:node()]. 
 
 %%
 %% check if key managed by VNode
@@ -221,17 +227,7 @@ belong(Key, Addr) ->
 %% build hash tree
 htbuild(Addr, Sup) ->
    htree:build(
-      [X || {X, _, _, _} <- supervisor:which_children(Sup),
+      [{X, Pid} || {X, Pid, _, _} <- supervisor:which_children(Sup),
             belong(X, Addr) =/= false]).
-
-% hash(L, T) ->
-%    case htree:hash(L, T) of
-%       undefined ->
-%          htree:hash(L, T);
-%       Hash      ->
-%          Hash
-%    end.
-
-
 
 

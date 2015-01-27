@@ -189,6 +189,9 @@ handle_event({ae_req_handshake, _}, Pipe, Sid, State) ->
 handle_event({hash, _, _}, _Pipe, Sid, State) ->
    {next_state, Sid, State};
 
+handle_event(reconcile, _Pipe, Sid, State) ->
+   {next_state, Sid, State}; 
+
 handle_event(_Msg, _Pipe, Sid, State) ->
    ?WARNING("ambit [ae]: unknown message ~p at ~s~n", [_Msg, Sid]),
    {next_state, Sid, State}.

@@ -78,23 +78,6 @@ idle(#{msg := _Msg} = Req0, Pipe, _State) ->
 idle(_, _, State) ->
    {next_state, idle, State}.
 
-% %%
-% %% execute domestic 
-% domestic({Tx, Value}, _,  {[{Tx, Vnode}], Req0}) ->
-%    Req1 = ambit_req:accept(Value, Req0),
-%    case ambit_req:peers(Req1) of
-%       [Vnode] ->
-%          {next_state, idle, ambit_req:free(Req1)};
-%       _       ->
-%          {next_state, foreign, req_peer_vnode(Req1)}
-%    end;
-
-% domestic(timeout, _, {_, Req0}) ->
-%    Req1 = ambit_req:accept({error, timeout}, Req0),
-%    {stop, normal, ambit_req:free(Req1)};
-
-% domestic(_, _, State) ->
-%    {next_state, idle, State}.
 
 %%
 %%
@@ -113,7 +96,6 @@ active(timeout, _, {_, Req0}) ->
 
 active(_, _, State) ->
    {next_state, active, State}.
-
 
 %%%----------------------------------------------------------------------------   
 %%%

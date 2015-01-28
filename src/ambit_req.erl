@@ -96,20 +96,23 @@ t(Msg, #{t := Timeout} = Req) ->
 -spec(whois/2 :: (any(), req()) -> {pid(), req()}).
 
 whois(Key, Req) ->
-   %% @todo filter unique nodes
-   Peers = ek:successors(ambit, Key),
-   case lists:dropwhile(fun({X, _, _, _}) -> X =/= primary end, Peers) of
-      [] ->
-         {_, _, _, Pid} = Vnode = hd(Peers),
-         Node = erlang:node(Pid),
-         Peer = [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node],
-         {Pid, Req#{peer => [Vnode | Peer]}};
-      L  ->
-         {_, _, _, Pid} = Vnode = hd(L),
-         Node = erlang:node(Pid),
-         Peer = [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node],
-         {Pid, Req#{peer => [Vnode | Peer]}}
-   end.
+   [{_, _, _, Pid} | _] = Peers = ambit:sibling(fun ek:successors/2, Key),
+   {Pid, Req#{peer => Peers}}.
+
+   % %% @todo filter unique nodes
+   % Peers = ek:successors(ambit, Key),
+   % case lists:dropwhile(fun({X, _, _, _}) -> X =/= primary end, Peers) of
+   %    [] ->
+   %       {_, _, _, Pid} = Vnode = hd(Peers),
+   %       Node = erlang:node(Pid),
+   %       Peer = [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node],
+   %       {Pid, Req#{peer => [Vnode | Peer]}};
+   %    L  ->
+   %       {_, _, _, Pid} = Vnode = hd(L),
+   %       Node = erlang:node(Pid),
+   %       Peer = [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node],
+   %       {Pid, Req#{peer => [Vnode | Peer]}}
+   % end.
 
 
 %%

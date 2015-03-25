@@ -1,21 +1,17 @@
 %% @description
-%%   virtual node - actor spawner service
+%%   virtual node - actor spawner interface
 -module(ambit_vnode_spawn).
 -behaviour(pipe).
 
 -include("ambit.hrl").
 
 -export([
-   start_link/2
+   start_link/1
   ,init/1
   ,free/2
   ,ioctl/2
   ,handle/3
 ]).
-
--define(CHILD(Mode, Addr, Name, Service), 
-   {Name, {ambit_actor, start_link, [Mode, Addr, Name, Service]}, permanent, 30000, worker, dynamic}
-).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -23,16 +19,17 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(Vnode, Sup) ->
-   pipe:start_link(?MODULE, [Vnode, Sup], []).
+start_link(Vnode) ->
+   pipe:start_link(?MODULE, [Vnode], []).
 
-init([{_, Addr, _, _}=Vnode, Sup]) ->
+init([{_, Addr, _, _}=Vnode]) ->
    ?DEBUG("ambit [spawn]: init ~p", [Vnode]),
+   %% @conj on pns reg
    ok = pns:register(vnode, {primary, Addr}, self()),
    ok = pns:register(vnode, {handoff, Addr}, self()),
-   {ok, handle, #{sup => Sup, addr => Addr}}.
+   {ok, handle, Vnode}.
 
-free(_, #{}) ->
+free(_, _Vnode) ->
    ok.
 
 ioctl(_, _) ->
@@ -48,22 +45,28 @@ ioctl(_, _) ->
 %%
 % handle({{primary, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
 % handle({{handoff, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
-handle({spawn, Name, Service}, Pipe, State) ->
-   pipe:a(Pipe, create(primary, Name, Service, State)),
+handle({spawn, Name, Service}, Pipe, {_, Addr, _, _}=State) ->
+   pipe:a(Pipe, 
+      %% crash noproc, addr gone !? !?
+      pts:ensure(Addr, Name, [primary, Service])
+   ),
    {next_state, handle, State};
 
 %%
 % handle({{primary, _, _, _}, {free, Name}}, Pipe, State) ->
 % handle({{handoff, _, _, _}, {free, Name}}, Pipe, State) ->
-handle({free, Name}, Pipe, State) ->
-   pipe:a(Pipe, destroy(Name, State)),
+handle({free, Name}, Pipe, {_, Addr, _, _}=State) ->
+   pts:send(Addr, Name, free),
+   pipe:a(Pipe, ok),
    {next_state, handle, State};
 
 %%
 % handle({{primary, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
 % handle({{handoff, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
-handle({whereis, Name}, Pipe, #{addr := Addr} = State) ->
-   pipe:a(Pipe, pns:whereis(ambit, {Addr, Name})),
+handle({whereis, Name}, Pipe, {_, Addr, _, _}=State) ->
+   pipe:a(Pipe, 
+      pns:whereis(ambit, {Addr, Name})
+   ),
    {next_state, handle, State};
 
 handle(_, _Tx, State) ->
@@ -77,31 +80,3 @@ handle(_, _Tx, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%%
-create(Mode, Name, Service, #{addr := Addr, sup := Sup}=State) ->
-   case supervisor:start_child(Sup, ?CHILD(Mode, Addr, Name, Service)) of
-      {ok, Pid} ->
-         ok;
-
-      {error, {already_started, Pid}} ->
-         ok;
-
-      Error ->
-         Error
-   end.
-
-%%
-%%
-destroy(Name, #{addr := Addr, sup := Sup}=State) ->
-   supervisor:terminate_child(Sup, Name),
-   case supervisor:delete_child(Sup, Name) of
-      ok ->
-         ok;
-
-      {error, not_found} ->
-         ok;
-
-      Error ->
-         Error
-   end.

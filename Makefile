@@ -205,7 +205,7 @@ run:
 
 benchmark:
 	@echo "==> benchmark: ${TEST}" ;\
-	$(BB)/basho_bench -N bb@127.0.0.1 -C nocookie ${TEST} ;\
+	$(BB)/basho_bench -N bb@127.0.0.1 -C nocookie -J ${AMBIT} ${TEST} ;\
 	$(BB)/priv/summary.r -i tests/current ;\
 	open tests/current/summary.png
 

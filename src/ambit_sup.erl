@@ -42,7 +42,6 @@ init([]) ->
             ?CHILD(worker,     ambit_peer)
            % ,?CHILD(supervisor, pq,  [ambit_req, ?POOL])
            ,?CHILD(supervisor, vnode, pts, [vnode, ?HEAP_VNODE])
-           ,?CHILD(supervisor, ambit_vnode_root_sup)
          ]
       }
    }.

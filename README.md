@@ -14,7 +14,7 @@ The library employs very complex architecture solution. It require variety of so
 
 * _request marshalling_ and _request routing_ is implemented using Erlang distribution, which is abstracted using pipe library
 
-* _membership_ and _failure detection_ is provided by erlang kluster library.
+* _membership_ and _failure detection_ is provided by erlang kluster (ek) library.
 
 * _failure recovery_ is based on Erlang supervisor framework.
 
@@ -22,11 +22,11 @@ The library employs very complex architecture solution. It require variety of so
 
 * _replica synchronization_ and _state transfer_ is implemented using anti-entropy protocols
 
-* _overload handling_
+* _overload handling_ - xxx
 
-* _system monitoring_ and _alarming_
+* _system monitoring_ and _alarming_ - xxx
 
-* _configuration management_ 
+* _configuration management_ - xxx
 
 
 
@@ -44,7 +44,7 @@ The library associates processes with a key and provides life cycle management t
 
 ## cluster partition
 
-The library uses consistent hashing algorithm to bind process with cluster replicas. It ensures a fixed mapping of key to corresponding replica (for given set of cluster nodes); it also guaranties that only ```k / s``` processes needs to be relocated on average when new node joins a cluster.    
+The library uses consistent hashing algorithm to bind process with cluster replicas. It ensures a fixed mapping of key to corresponding replica (for given set of cluster nodes); it also guaranties that only ```q / s``` processes needs to be relocated on average when new node joins a cluster.    
 
 Let's have a finite field of integers on modulo 2^m, they form a ring. The ring defines a function that place any integer to ring:
 
@@ -89,5 +89,5 @@ tbd
 
 1. sloppy quorum.
 
-
+1. ...
 

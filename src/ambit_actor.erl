@@ -6,15 +6,14 @@
 -include("ambit.hrl").
 
 -export([
-   start_link/4
+   start_link/5
   ,init/1
   ,free/2
   ,ioctl/2
   ,primary/3
   ,handoff/3
    %% api
-  ,service/1
-  ,process/1
+  ,service/2
 ]).
 
 
@@ -24,20 +23,22 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(State, Addr, Name, Service) ->
-   pipe:start_link(?MODULE, [State, Addr, Name, Service], []).
+start_link(Sup, State, Addr, Name, Service) ->
+   pipe:start_link(?MODULE, [Sup, State, Addr, Name, Service], []).
 
-init([primary, Addr, Name, {Mod, Fun, Args}=Service]) ->
-   ?DEBUG("ambit [actor]: init primary ~p (~p)", [Name, Service]),
-   {ok, Pid} = erlang:apply(Mod, Fun, Args),
-   _ = pns:register(ambit, {Addr, Name}, Pid),
-   {ok, primary, #{service => Service, process => Pid}};
+init([Sup, primary, Addr, Name, Service]) ->
+   ?DEBUG("ambit [actor]: init primary ~p (~p) ~p", [Name, Service, {Addr, Name, actor}]),
+   _ = pns:register(Addr, Name, self()),
+   erlang:send(self(), spawn),
+   {ok, primary, #{sup => Sup, addr => Addr, name => Name, service => Service, process => undefined}};
 
-init([handoff, _Addr, Name, Service]) ->
-   ?DEBUG("ambit [actor]: init handoff ~p (~p)", [Name, Service]),
-   {ok, handoff, #{service => Service}}.
+init([Sup, handoff, Addr, Name, Service]) ->
+   ?DEBUG("ambit [actor]: init handoff ~p (~p) ~p", [Name, Service, {Addr, Name, actor}]),
+   _ = pns:register(Addr, Name, self()),
+   {ok, handoff, #{sup => Sup, addr => Addr, name => Name, service => Service}}.
 
-free(_, #{}) ->
+free(_, #{sup := Sup, addr := Addr}) ->
+   supervisor:terminate_child(pts:i(factory, Addr), Sup),
    ok.
 
 ioctl(_, _) ->
@@ -49,11 +50,9 @@ ioctl(_, _) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-service(Pid) ->
-   pipe:call(Pid, service).
-
-process(Pid) ->
-   pipe:call(Pid, process).
+%% return service specification
+service(Addr, Name) ->
+   pts:call(Addr, Name, service).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -63,6 +62,16 @@ process(Pid) ->
 
 %%
 %%
+primary(spawn, _, #{sup := Sup, addr := Addr, name := Name, service := Service} = State) ->
+   {ok, Pid} = ambit_actor_sup:start_child(Sup, Service),
+   _ = pns:register(ambit, {Addr, Name}, Pid),
+   {next_state, primary, State#{process := Pid}};
+
+primary(free, _, #{addr := Addr, name := Name}=State) ->
+   _ = pns:unregister(ambit, {Addr, Name}),
+   _ = pns:unregister(Addr, Name),
+   {stop, normal, State};
+
 primary(service, Tx, #{service := Service}=State) ->
    pipe:ack(Tx, Service),
    {next_state, primary, State};

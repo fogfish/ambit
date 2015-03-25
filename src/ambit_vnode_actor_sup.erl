@@ -1,4 +1,4 @@
--module(ambit_vnode_root_sup).
+-module(ambit_vnode_actor_sup).
 -behaviour(supervisor).
 
 -export([
@@ -23,8 +23,9 @@ start_link() ->
 init([]) ->   
    {ok,
       {
-         {one_for_one, 100000, 1},
+         {simple_one_for_one, 100000, 1},
          [
+            ?CHILD(supervisor, ambit_actor_sup)
          ]
       }
    }.

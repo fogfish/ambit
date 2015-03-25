@@ -1,0 +1,24 @@
+{code_paths, [
+   "./ebin"
+  ,"./deps/feta"
+]}.
+{log_level,       info}.
+{report_interval, 1}.
+{driver,          ambit_benchmark}.
+
+
+
+%%
+%% workload
+{mode,            max}.
+{duration,          1}.
+{concurrent,       16}.
+{key_generator,    {partitioned_sequential_int, 800000}}.
+% {key_generator,    {uniform_int, 10000000}}.
+{value_generator,  {fixed_bin,   1024}}.
+
+{operations, [
+    % {spawn,   1} 
+    {whereis,   1} 
+]}.
+

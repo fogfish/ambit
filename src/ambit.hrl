@@ -14,9 +14,18 @@
 %% heap of vnode processes
 -define(HEAP_VNODE, [
    'read-through'
-  ,{keylen,   inf}
-  ,{entity,   ambit_vnode}
-  ,{factory,  transient}
+  ,{keylen,      inf}
+  ,{supervisor,  ambit_vnode_sup}
+  ,{factory,     transient}
+]).
+
+%%
+%% heap of actor processes
+-define(HEAP_ACTOR, [
+   'read-through'
+  ,{keylen,      inf}
+  ,{supervisor,  ambit_actor_sup}
+  ,{factory,     temporary}
 ]).
 
 
@@ -34,8 +43,8 @@
 
 %%
 %% anti entropy frequency in milliseconds
--ifndef(CONFIG_CYCLE_AE).
--define(CONFIG_CYCLE_AE,     10000).
+-ifndef(CONFIG_TIMEOUT_GOSSIP).
+-define(CONFIG_TIMEOUT_GOSSIP,   {120000, 1.0}).
 -endif.
 
 

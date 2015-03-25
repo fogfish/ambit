@@ -49,7 +49,7 @@ call(Key, Req0) ->
    Req1 = ambit_req:new(Req0),
    {Pid, Req2} = ambit_req:whois(Key, Req1),
    {UoW, Req3} = ambit_req:lease(Pid, Req2),
-   pipe:call(UoW, Req3).
+   pipe:call(UoW, Req3, infinity). %% @todo: timeout some conj
 
 
 %%%----------------------------------------------------------------------------   
@@ -69,7 +69,7 @@ idle(#{msg := _Msg} = Req0, Pipe, _State) ->
             request_vnode(ambit_req:pipe(Pipe, Req0))
          };
       {error, _} = Error ->
-         {_, Req1} = ambit_req:accept(Error, 
+         Req1 = ambit_req:accept(Error, 
             ambit_req:pipe(Pipe, Req0)
          ),
          {next_state, idle, ambit_req:free(Req1)}

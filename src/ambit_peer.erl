@@ -27,6 +27,7 @@ start_link() ->
    pipe:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
+   %% @todo: move under root sup
    {ok,    _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
    {ok, Pool} = pq:start_link([
       {type,     reusable}     
@@ -101,41 +102,29 @@ handle({cast, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
          {next_state, handle, State}
    end;
 
-handle({send, {Hand, Addr, _, _}, Msg}, Pipe, State) ->
-   case pns:whereis(vnode, {Hand, Addr}) of
-      undefined ->
+handle({send, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
+   case ensure(Node, Addr) of
+      {ok,    _} ->
+         pipe:emit(Pipe, lookup(Vnode), Msg),
          {next_state, handle, State};
-      Pid ->
-         pipe:emit(Pipe, Pid, Msg),
+      {error, _} = Error ->
+         pipe:a(Pipe, Error),
          {next_state, handle, State}
    end;
+   % case pns:whereis(vnode, {Hand, Addr}) of
+   %    undefined ->
+   %       {next_state, handle, State};
+   %    Pid ->
+   %       pipe:emit(Pipe, Pid, Msg),
+   %       {next_state, handle, State}
+   % end;
 
 %%
 %%
-handle({join, Peer, Pid}, _Tx, #{node := Node} = State) ->
-   %% new node joined cluster, relocate vnode
-   ?NOTICE("ambit [peer]: join ~s", [Peer]),
-   lists:foreach(
-      fun({Addr, _}) ->
-         case pns:whereis(vnode, Addr) of
-            %% vnode is not executed by local node, do nothing 
-            undefined ->
-               ok;
-
-            %% vnode needs to be relocated if local node is not in candidate list   
-            X ->
-               case 
-                  lists:keyfind(Node, 3, ek:successors(ambit, Addr))
-               of
-                  false ->
-                     pipe:send(X, {handoff, {primary, Addr, Peer, Pid}});
-                  _     ->
-                     ok
-               end
-         end
-      end,
-      ek:whois(ambit, Peer)
-   ),
+handle({join, _Peer, _Pid}, _Tx, #{node := Node} = State) ->
+   %% new node joined cluster, relocate local vnode
+   ?NOTICE("ambit [peer]: join ~s", [_Peer]),
+	pts:foreach(fun(Addr, _) -> handoff(Addr, Node) end, vnode),
    {next_state, handle, State};
 
 % handle({handoff, _Peer}) ->
@@ -162,6 +151,7 @@ ensure(Node, Addr) ->
             false ->
                {error,  eaddrnotavail};
             _     ->
+               %% @ race cond?
                pts:ensure(vnode, Addr)
          end;
       Vnode     ->
@@ -172,5 +162,44 @@ ensure(Node, Addr) ->
 %% lookup service hand of given Vnode
 lookup({Hand,  Addr, _, _}) ->
    pns:whereis(vnode, {Hand, Addr}).
+
+%%
+%% hand-off vnode
+handoff({_, _},  _) ->
+	ok;
+handoff(Addr, Node) ->
+	[Vnode | _] = List = ek:successors(ambit, Addr),
+	case 
+      lists:keyfind(Node, 3, List)
+   of
+      false ->
+         pts:send(vnode, Addr, {handoff, Vnode});
+      _     ->
+         ok
+   end.
+
+   % lists:foreach(
+   %    fun({Addr, _}) ->
+			% %% ? pns:whereis(vnode, Addr) check out due to pts
+   %       case pns:whereis(vnode, Addr) of
+   %          %% vnode is not executed by local node, do nothing 
+   %          undefined ->
+   %             ok;
+
+   %          %% vnode needs to be relocated if local node is not in candidate list   
+   %          X ->
+   %             case 
+   %                lists:keyfind(Node, 3, ek:successors(ambit, Addr))
+   %             of
+   %                false ->
+			% 				io:format("==> handoff ~p~n", [{handoff, {primary, Addr, Peer, Pid}}]),
+   %                   pipe:send(X, {handoff, {primary, Addr, Peer, Pid}});
+   %                _     ->
+   %                   ok
+   %             end
+   %       end
+   %    end,
+   %    ek:whois(ambit, Peer)
+   % ),
 
 

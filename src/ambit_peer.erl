@@ -29,17 +29,11 @@ start_link() ->
 init(_) ->
    %% @todo: move under root sup
    {ok,    _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
-   {ok, Pool} = pq:start_link([
-      {type,     reusable}     
-     ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, thing)}    
-     ,{worker,   ambit_coordinator}    
-   ]),
    Node = scalar:s(erlang:node()),
    ok   = ek:join(ambit, Node, self()),
    {ok, handle, 
       #{
-         node => Node,
-         pool => Pool 
+         node => Node 
       }
    }.
 
@@ -56,7 +50,7 @@ ioctl(_, _) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% request coordinator 
+%% lease transaction coordinator 
 -spec(coordinator/1 :: (pid()) -> any()).
 
 coordinator(Peer) ->
@@ -86,9 +80,9 @@ send({_, _, _, Pid} = Vnode, Msg) ->
 
 %%
 %%
-handle(coordinator, Pipe, #{pool := Pool} = State) ->
+handle(coordinator, Pipe, State) ->
    pipe:ack(Pipe,
-      pq:lease(Pool, [{tenant, pipe:a(Pipe)}])
+      pq:lease(ambit_coordinator, [{tenant, pipe:a(Pipe)}])
    ),
    {next_state, handle, State};
 
@@ -122,7 +116,8 @@ handle({send, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
 %%
 %%
 handle({join, _Peer, _Pid}, _Tx, #{node := Node} = State) ->
-   %% new node joined cluster, relocate local vnode
+   %% new node joined cluster, all local v-nodes needs to be checked
+   %% if relocation condition is met
    ?NOTICE("ambit [peer]: join ~s", [_Peer]),
 	pts:foreach(fun(Addr, _) -> handoff(Addr, Node) end, vnode),
    {next_state, handle, State};
@@ -151,7 +146,6 @@ ensure(Node, Addr) ->
             false ->
                {error,  eaddrnotavail};
             _     ->
-               %% @ race cond?
                pts:ensure(vnode, Addr)
          end;
       Vnode     ->
@@ -177,29 +171,5 @@ handoff(Addr, Node) ->
       _     ->
          ok
    end.
-
-   % lists:foreach(
-   %    fun({Addr, _}) ->
-			% %% ? pns:whereis(vnode, Addr) check out due to pts
-   %       case pns:whereis(vnode, Addr) of
-   %          %% vnode is not executed by local node, do nothing 
-   %          undefined ->
-   %             ok;
-
-   %          %% vnode needs to be relocated if local node is not in candidate list   
-   %          X ->
-   %             case 
-   %                lists:keyfind(Node, 3, ek:successors(ambit, Addr))
-   %             of
-   %                false ->
-			% 				io:format("==> handoff ~p~n", [{handoff, {primary, Addr, Peer, Pid}}]),
-   %                   pipe:send(X, {handoff, {primary, Addr, Peer, Pid}});
-   %                _     ->
-   %                   ok
-   %             end
-   %       end
-   %    end,
-   %    ek:whois(ambit, Peer)
-   % ),
 
 

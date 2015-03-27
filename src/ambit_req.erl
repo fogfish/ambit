@@ -32,24 +32,14 @@ new(Msg) ->
 
 new(Msg, Timeout)
  when is_integer(Timeout) ->
-   new(erlang:element(1, Msg), Msg, Timeout).
-
-new(spawn, Msg, T) ->
-   #{mod => ambit_req_spawn, msg => Msg, t => T};
-
-new(free, Msg, T) ->
-   #{mod => ambit_req_free, msg => Msg, t => T};
-
-new(whereis, Msg, T) ->
-   #{mod => ambit_req_whereis, msg => Msg, t => T}.
-
+	#{req => erlang:element(1, Msg), msg => Msg, t => Timeout, value => []}.
 
 %%
 %%
 -spec(free/1 :: (req()) -> ok).
 
-free(#{pipe := Pipe, value := Value} = Req) ->
-   pipe:a(Pipe, Value),
+free(#{pipe := Pipe, req := Id, value := Value} = Req) ->
+   pipe:a(Pipe, unit(Id, Value)),
    free(maps:remove(pipe, Req));
 
 free(#{t := T} = Req) ->
@@ -88,7 +78,7 @@ payload(#{msg := Payload}) ->
 %%
 %% set timeout
 t(Msg, #{t := Timeout} = Req) ->
-   Req#{t => tempus:timer(Msg, Timeout)}.
+   Req#{t => tempus:timer(Timeout, Msg)}.
 
 
 %%
@@ -99,44 +89,56 @@ whois(Key, Req) ->
    [{_, _, _, Pid} | _] = Peers = ambit:sibling(fun ek:successors/2, Key),
    {Pid, Req#{peer => Peers}}.
 
-   % %% @todo filter unique nodes
-   % Peers = ek:successors(ambit, Key),
-   % case lists:dropwhile(fun({X, _, _, _}) -> X =/= primary end, Peers) of
-   %    [] ->
-   %       {_, _, _, Pid} = Vnode = hd(Peers),
-   %       Node = erlang:node(Pid),
-   %       Peer = [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node],
-   %       {Pid, Req#{peer => [Vnode | Peer]}};
-   %    L  ->
-   %       {_, _, _, Pid} = Vnode = hd(L),
-   %       Node = erlang:node(Pid),
-   %       Peer = [X || {_, _, _, P} = X <- Peers, erlang:node(P) =/= Node],
-   %       {Pid, Req#{peer => [Vnode | Peer]}}
-   % end.
-
-
 %%
 %% lease unit of work to handle request
 -spec(lease/2 :: (pid(), req()) -> {pid(), req()}).
 
 lease(Peer, Req) ->
-   UoW = ambit_peer:coordinator(Peer),
-   {pq:pid(UoW), Req#{uow => UoW}}.
+	case ambit_peer:coordinator(Peer) of
+		{error, _} = Error ->
+			Error;
+		UoW ->
+   		{pq:pid(UoW), Req#{uow => UoW}}
+	end.
 
 %%
 %% bind request with pipe
 -spec(pipe/2 :: (any(), req()) -> req()).
 
-pipe(Pipe, #{} = Req) ->
+pipe(Pipe, Req) ->
    Req#{pipe => Pipe}.
 
 %%
 %% accept vnode result
 -spec(accept/2 :: (any(), req()) -> {atom(), req()}).
 
-accept(Value, #{mod := Mod} = Req) ->
-   Mod:accept(Value, Req);
+accept({ok, _}, #{value := Value} = Req) ->
+	Req#{value => [ok | Value]};
+accept(Vx, #{value := Value} = Req) ->
+	Req#{value => [Vx | Value]}.
 
-accept(Value, Req) ->
-   Req#{value => Value}.
+
+unit(spawn,   Values) ->
+	case 
+		lists:partition(fun(X) -> X =:= ok end, Values)
+	of
+		%% no positive results, transaction is failed
+		{[], Error} -> hd(Error);
+		{_,      _} -> ok
+	end;
+
+unit(free,    Values) ->
+	case
+		lists:partition(fun(X) -> X =:= ok end, Values)
+	of
+		{_,     []} -> ok;
+		%% there is a negative result 
+		{_,  Error} -> hd(Error)
+	end;
+
+unit(whereis, Values) ->
+	[X || X <- Values, is_pid(X)].
+
+
+
 

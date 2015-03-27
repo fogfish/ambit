@@ -24,7 +24,6 @@ start_link(Vnode) ->
 
 init([{_, Addr, _, _}=Vnode]) ->
    ?DEBUG("ambit [spawn]: init ~p", [Vnode]),
-   %% @conj on pns reg
    ok = pns:register(vnode, {primary, Addr}, self()),
    ok = pns:register(vnode, {handoff, Addr}, self()),
    {ok, handle, Vnode}.
@@ -47,7 +46,6 @@ ioctl(_, _) ->
 % handle({{handoff, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
 handle({spawn, Name, Service}, Pipe, {_, Addr, _, _}=State) ->
    pipe:a(Pipe, 
-      %% crash noproc, addr gone !? !?
       pts:ensure(Addr, Name, [primary, Service])
    ),
    {next_state, handle, State};

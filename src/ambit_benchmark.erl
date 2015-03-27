@@ -3,20 +3,25 @@
 -module(ambit_benchmark).
 
 -export([new/1, run/4]).
--export([run/1]).
+-export([run/0, run/1]).
 
 -define(SERVICE, {ambit_echo, start_link, []}).
 
+new(1) ->
+   lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, info)),
+	ambit:start(),
+   timer:sleep(10000),
+	{ok, #{}};
 new(_) ->
    {ok, #{}}.
 
 %%
 %%
 run(spawn, KeyGen, _ValGen, State) ->
-   Nodes = erlang:nodes(),
-   Node  = lists:nth(random:uniform(length(Nodes)), Nodes),
+   % Nodes = erlang:nodes(),
+   % Node  = lists:nth(random:uniform(length(Nodes)), Nodes),
    case
-      rpc:call(Node, ambit, spawn, [scalar:s(KeyGen()), ?SERVICE])
+      ambit:spawn(scalar:s(KeyGen()), ?SERVICE)
    of
       ok ->
          {ok,  State};
@@ -25,18 +30,18 @@ run(spawn, KeyGen, _ValGen, State) ->
    end;
 
 run(whereis, KeyGen, _ValGen, State) ->
-   Nodes = erlang:nodes(),
-   Node  = lists:nth(random:uniform(length(Nodes)), Nodes),
+   % Nodes = erlang:nodes(),
+   % Node  = lists:nth(random:uniform(length(Nodes)), Nodes),
    case
-      rpc:call(Node, ambit, whereis, [scalar:s(KeyGen())])
+      ambit:whereis(scalar:s(KeyGen()))
    of
       {error, Reason} ->
          {error, Reason, State};
 
-      List when is_list(List), length(List) =:= 3 ->
+      List when is_list(List), length(List)  > 1 ->
          {ok,  State};
 
-      List when is_list(List), length(List)  <  3 ->
+      _ ->
          {error, na, State}
    end;
 
@@ -50,14 +55,17 @@ run(_, _KeyGen, _ValGen, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
--define(N,         4).
--define(LOOP,     10 * 100).
+-define(N,         8).
+-define(LOOP,     10 * 1000).
 -define(TIMEOUT,  60 * 1000).
+
+run() ->
+	run(erlang:node()).	
 
 run(Seed) ->
    ambit:start(),
    net_adm:ping(Seed),
-   timer:sleep(10000),
+   Seed =/= erlang:node() andalso timer:sleep(10000),
    % ambit:spawn(<<"dbpedia">>, {ambit_echo, start_link, []}),
    case timer:tc(fun() -> exec(?N) end) of
       {T, ok} ->

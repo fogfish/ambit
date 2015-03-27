@@ -16,7 +16,8 @@
    'read-through'
   ,{keylen,      inf}
   ,{supervisor,  ambit_vnode_sup}
-  ,{factory,     transient}
+  % ,{factory,     transient}
+  ,{factory,     permanent}
 ]).
 
 %%

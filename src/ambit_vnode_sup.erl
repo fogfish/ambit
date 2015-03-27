@@ -30,10 +30,13 @@ init([Addr]) ->
       {
          {one_for_one, 0, 1},
          [
+				%% @todo: we need to reserve token due to concurrency
+            %%        reserve token at sup and re-bind it to vnode pns:swap
+            ?CHILD(worker, ambit_vnode, [self(), Vnode])
+
             %% require before anything
-            ?CHILD(supervisor, pts, [Addr, ?HEAP_ACTOR])
+           ,?CHILD(supervisor, pts, [Addr, ?HEAP_ACTOR])
            
-           ,?CHILD(worker, ambit_vnode, [self(), Vnode])
            ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
             %% @todo: make gossip configurable (enable/disable + timeouts)
            ,?CHILD(worker, gossip,  [[

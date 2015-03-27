@@ -14,14 +14,14 @@
 
 %%
 %% RnD application start
--ifdef(CONFIG_DEBUG).
+-define(CONFIG, "./priv/app.config").
 start() ->
-   applib:boot(?MODULE, []),
-   lager:set_loglevel(lager_console_backend, debug).
--else.
-start() ->
-   applib:boot(?MODULE, []).
--endif.
+	case filelib:is_file(?CONFIG) of
+		true ->
+   		applib:boot(?MODULE, ?CONFIG);
+		_    ->
+			applib:boot(?MODULE, [])
+	end.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -44,7 +44,7 @@ free(Key) ->
    ambit_coordinator:call(Key, {free, Key}).
 
 %%
-%% lookup pids associated with given service
+%% lookup service end-point
 -spec(whereis/1 :: (any()) -> [pid()]).
 
 whereis(Key) ->

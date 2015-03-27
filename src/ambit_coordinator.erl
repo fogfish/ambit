@@ -42,7 +42,7 @@ ioctl(_, _) ->
 
 
 %%
-%% request coordinator
+%% delegate request to coordinator
 -spec(call/2 :: (any(), any()) -> {ok, any()} | {error, any()}).
 
 call(Key, Req0) ->
@@ -64,7 +64,7 @@ idle(#{msg := _Msg} = Req0, Pipe, _State) ->
    ?DEBUG("ambit [coord]: global req ~p", [_Msg]),
    case ensure(ambit_req:vnode(Req0)) of
       {ok, _} ->
-         %% @todo: validate quorum N + W property
+         %% @todo: validate sloppy quorum N + W property
          {next_state, active, 
             request_vnode(ambit_req:pipe(Pipe, Req0))
          };
@@ -111,7 +111,7 @@ lookup({Hand,  Addr, _, _}) ->
 %%
 %% ensure Vnode presence
 ensure({_Hand, Addr, _, _}) ->
-   pts:ensure(vnode, Addr).
+	pts:ensure(vnode, Addr).
 
 %%
 %% request service from vnode executed remotely

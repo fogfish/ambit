@@ -13,6 +13,7 @@
   ,handle/3
    %% interface
   ,coordinator/1
+  ,i/1
   ,cast/2
   ,send/2
 ]).
@@ -57,6 +58,14 @@ coordinator(Peer) ->
    pipe:call(Peer, coordinator, infinity).
 
 %%
+%% get vnode status 
+-spec(i/1 :: (ek:vnode()) -> any()).
+
+i({_, _, _, Peer} = Vnode) ->
+	pipe:call(Peer, {i, Vnode}).
+
+
+%%
 %% cast message to vnode
 -spec(cast/2 :: (ek:vnode(), any()) -> reference()).
 
@@ -84,6 +93,10 @@ handle(coordinator, Pipe, State) ->
    pipe:ack(Pipe,
       pq:lease(ambit_coordinator, [{tenant, pipe:a(Pipe)}])
    ),
+   {next_state, handle, State};
+
+handle({i, {_, Addr, _, _}}, Pipe, State) ->
+	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
    {next_state, handle, State};
 
 handle({cast, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->

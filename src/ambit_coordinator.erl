@@ -1,5 +1,5 @@
 %% @description
-%%   request coordinator process
+%%   client request coordinator
 -module(ambit_coordinator).
 -behaviour(pipe).
 

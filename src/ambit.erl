@@ -11,6 +11,9 @@
    predecessors/1,
    sibling/2
 ]).
+-export([
+	i/1
+]).
 
 %%
 %% RnD application start
@@ -90,6 +93,23 @@ sibling(Fun, Key) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
+%%
+%% check system status
+%%  Options
+%%    * alive - vnode availability
+%%    * alloc - vnode allocation
+i(alive) ->
+	[{X, length(Y)} || X <- ek:vnode(ambit), Y <- [i(X)], length(Y) =/= 0];
+
+i(alloc) ->
+	lists:foldl(
+		fun(X, Acc) -> orddict:update_counter(X, 1, Acc) end,
+		orddict:new(),
+		[Y || X <- ek:vnode(ambit), {_, _, Y, _} <- i(X)]
+	);
+
+i(Addr) ->
+	[X || X <- ek:successors(ambit, Addr), ambit_peer:i(X) =/= undefined].
 
 
 %%%----------------------------------------------------------------------------   

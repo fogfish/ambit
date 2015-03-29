@@ -62,10 +62,16 @@ service(Addr, Name) ->
 
 %%
 %%
-primary(spawn, _, #{sup := Sup, addr := Addr, name := Name, service := Service} = State) ->
-   {ok, Pid} = ambit_actor_sup:start_child(Sup, Service),
-   _ = pns:register(ambit, {Addr, Name}, Pid),
-   {next_state, primary, State#{process := Pid}};
+primary(spawn, _, #{sup := Sup, addr := Addr, name := Name, service := {Mod, _, _} = Service} = State) ->
+   {ok, Root} = ambit_actor_sup:start_child(Sup, Service),
+	case erlang:function_exported(Mod, actor, 1) of
+      true  ->
+			{ok, Pid} = Mod:actor(Root),
+			_ = pns:register(ambit, {Addr, Name}, Pid);
+      false ->
+			_ = pns:register(ambit, {Addr, Name}, Root)
+   end,
+   {next_state, primary, State#{process := Root}};
 
 primary(free, _, #{addr := Addr, name := Name}=State) ->
    _ = pns:unregister(ambit, {Addr, Name}),

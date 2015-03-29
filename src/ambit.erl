@@ -2,7 +2,7 @@
 %%   distributed actors
 -module(ambit).
 
--export([start/0]).
+-export([behaviour_info/1]).
 -export([
    spawn/2,
    free/1,
@@ -12,19 +12,28 @@
    sibling/2
 ]).
 -export([
-	i/1
+   start/0
+  ,i/1
 ]).
 
+%%%----------------------------------------------------------------------------   
+%%%
+%%% actor behavior interface
+%%%
+%%%----------------------------------------------------------------------------   
+
 %%
-%% RnD application start
--define(CONFIG, "./priv/app.config").
-start() ->
-	case filelib:is_file(?CONFIG) of
-		true ->
-   		applib:boot(?MODULE, ?CONFIG);
-		_    ->
-			applib:boot(?MODULE, [])
-	end.
+%% 
+behaviour_info(callbacks) ->
+   [
+      %%
+      %% get identity of actor process 
+      %%
+      %% -spec(actor/1 :: (pid()) -> {ok, pid()} | {error, any()}).
+      {actor, 1}
+	];
+behaviour_info(_) ->
+   undefined.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -110,6 +119,18 @@ i(alloc) ->
 
 i(Addr) ->
 	[X || X <- ek:successors(ambit, Addr), ambit_peer:i(X) =/= undefined].
+
+
+%%
+%% RnD application start
+-define(CONFIG, "./priv/app.config").
+start() ->
+	case filelib:is_file(?CONFIG) of
+		true ->
+   		applib:boot(?MODULE, ?CONFIG);
+		_    ->
+			applib:boot(?MODULE, [])
+	end.
 
 
 %%%----------------------------------------------------------------------------   

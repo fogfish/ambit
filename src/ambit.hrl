@@ -11,6 +11,10 @@
 -endif.
 
 %%
+%% default R/W parameters
+-define(CONFIG_N,      1).
+
+%%
 %% heap of vnode processes
 -define(HEAP_VNODE, [
    'read-through'

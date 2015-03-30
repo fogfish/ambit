@@ -1,7 +1,7 @@
 {application, ambit,
    [
       {description, "distributed actors"},
-      {vsn,         "0.2.0"},
+      {vsn,         "0.3.0"},
       {modules,     []},
       {registered,  []},
       {applications,[
@@ -15,6 +15,7 @@
         ,ek
         ,pq
         ,gossip
+        ,clue
       ]},
       {mod, {ambit_app, []}},
       {env, []}

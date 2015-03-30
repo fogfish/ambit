@@ -13,7 +13,7 @@
   ,idle/3
   ,active/3
    % api
-  ,call/2
+  ,call/3
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -26,6 +26,7 @@ start_link() ->
    pipe:start_link(?MODULE, [], []).
 
 init(_) ->
+   lager:md([{ambit, tx}]),
    {ok, idle, #{}}.
 
 free(_, _) ->
@@ -42,14 +43,23 @@ ioctl(_, _) ->
 
 
 %%
-%% delegate request to coordinator
--spec(call/2 :: (any(), any()) -> {ok, any()} | {error, any()}).
+%% delegate request handling to coordinator process
+-spec(call/3 :: (any(), any(), list()) -> {ok, any()} | {error, any()}).
 
-call(Key, Req0) ->
-   Req1 = ambit_req:new(Req0),
+call(Key, Req0, Opts) ->
+   Req1 = ambit_req:new(Req0, Opts),
    {Pid, Req2} = ambit_req:whois(Key, Req1),
-   {UoW, Req3} = ambit_req:lease(Pid, Req2),
-   pipe:call(UoW, Req3, infinity). %% @todo: timeout some conj
+   case ambit_req:quorum(Req2) of
+      false ->
+         {error, quorum};
+      true  ->
+         case ambit_req:lease(Pid, Req2) of
+            {error, _} = Error ->
+               Error;
+            {UoW, Req3} ->
+               pipe:call(UoW, Req3, ambit_req:t(Req3))
+         end
+   end.
 
 
 %%%----------------------------------------------------------------------------   
@@ -61,10 +71,9 @@ call(Key, Req0) ->
 %%
 %%
 idle(#{msg := _Msg} = Req0, Pipe, _State) ->
-   ?DEBUG("ambit [coord]: global req ~p", [_Msg]),
+   ?NOTICE("request ~p", [_Msg]),
    case ensure(ambit_req:vnode(Req0)) of
       {ok, _} ->
-         %% @todo: validate sloppy quorum N + W property
          {next_state, active, 
             request_vnode(ambit_req:pipe(Pipe, Req0))
          };
@@ -81,17 +90,19 @@ idle(_, _, State) ->
 
 %%
 %%
-active({Tx, Value}, _, {List, Req0}) ->
+active({Tx, Value}, _, {List, #{msg := _Msg} = Req0}) ->
    Req1 = ambit_req:accept(Value, Req0),
    case lists:keytake(Tx, 1, List) of
       {value, {_Tx, _Vnode},   []} ->
+         ?DEBUG("complete ~p", [_Msg]),
          {next_state, idle, ambit_req:free(Req1)};
       {value, {_Tx, _Vnode}, Tail} ->
          {next_state, active, {Tail, Req1}}
    end;
 
-active(timeout, _, {_, Req0}) ->
+active(timeout, _, {_, #{msg := _Msg} = Req0}) ->
    Req1 = ambit_req:accept({error, timeout}, Req0),
+   ?DEBUG("timeout ~p", [_Msg]),
    {stop, normal, ambit_req:free(Req1)};
 
 active(_, _, State) ->
@@ -109,7 +120,7 @@ lookup({Hand,  Addr, _, _}) ->
    pns:whereis(vnode, {Hand, Addr}).
 
 %%
-%% ensure Vnode presence
+%% ensure local Vnode presence
 ensure({_Hand, Addr, _, _}) ->
 	pts:ensure(vnode, Addr).
 
@@ -128,7 +139,5 @@ request_vnode(Req) ->
    Vnode = hd(ambit_req:peers(Req)),
    Tx    = pipe:cast(lookup(Vnode), ambit_req:payload(Req)),
    {[{Tx, Vnode} | List], ambit_req:t(timeout, Req)}.
-
-
 
 

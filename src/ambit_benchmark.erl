@@ -66,7 +66,6 @@ run(Seed) ->
    ambit:start(),
    net_adm:ping(Seed),
    Seed =/= erlang:node() andalso timer:sleep(10000),
-   % ambit:spawn(<<"dbpedia">>, {ambit_echo, start_link, []}),
    case timer:tc(fun() -> exec(?N) end) of
       {T, ok} ->
          TPU = ?N * ?LOOP / T,
@@ -93,7 +92,6 @@ loop(Pid, _Id, 0) ->
    Pid ! {ok, self()};
 loop(Pid,  Id, N) ->
    ambit:spawn(<<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>, {ambit_echo, start_link, []}),
-   % ambit:whereis(<<"dbpedia">>),
    loop(Pid, Id, N - 1).
 
 

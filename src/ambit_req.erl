@@ -5,34 +5,38 @@
 -include("ambit.hrl").
 
 -export([
-   new/1,
    new/2,
    free/1,
 
    vnode/1,
    peers/1,
 
+   t/1,
    t/2,
    payload/1,
 
    whois/2,
    lease/2,
    pipe/2,
-   accept/2
+   accept/2,
+   quorum/1
 ]).
 
 -type(req() :: #{}).
 
 %%
 %%
--spec(new/1 :: (any()) -> req()).
+-spec(new/2 :: (any(), list()) -> req()).
 
-new(Msg) ->
-   new(Msg, 5000).
-
-new(Msg, Timeout)
- when is_integer(Timeout) ->
-	#{req => erlang:element(1, Msg), msg => Msg, t => Timeout, value => []}.
+new(Msg, Opts) ->
+	#{
+      req   => erlang:element(1, Msg)
+     ,msg   => Msg
+     ,at    => os:timestamp()
+     ,t     => opts:val(timeout, ?CONFIG_TIMEOUT_REQ, Opts)
+     ,n     => opts:val(r, opts:val(w, ?CONFIG_N, Opts), Opts)
+     ,value => []
+   }.
 
 %%
 %%
@@ -50,7 +54,8 @@ free(#{uow := UoW} = Req) ->
    pq:release(UoW),
    free(maps:remove(uow, Req));
 
-free(_) ->
+free(#{at := T}) ->
+   clue:usec({ambit, req, latency}, T),
    ok.
 
 %%
@@ -80,6 +85,8 @@ payload(#{msg := Payload}) ->
 t(Msg, #{t := Timeout} = Req) ->
    Req#{t => tempus:timer(Timeout, Msg)}.
 
+t(#{t := Timeout}) ->
+   Timeout.
 
 %%
 %% who is responsible to coordinate key and execute request
@@ -117,28 +124,42 @@ accept({ok, _}, #{value := Value} = Req) ->
 accept(Vx, #{value := Value} = Req) ->
 	Req#{value => [Vx | Value]}.
 
-
+%%
+%%
 unit(spawn,   Values) ->
 	case 
 		lists:partition(fun(X) -> X =:= ok end, Values)
 	of
 		%% no positive results, transaction is failed
-		{[], Error} -> hd(Error);
-		{_,      _} -> ok
+		{[], Error} -> 
+         clue:inc({ambit, req, failure}),
+         hd(Error);
+		{_,      _} -> 
+         clue:inc({ambit, req, success}),
+         ok
 	end;
 
 unit(free,    Values) ->
 	case
 		lists:partition(fun(X) -> X =:= ok end, Values)
 	of
-		{_,     []} -> ok;
+		{_,     []} -> 
+         clue:inc({ambit, req, success}),
+         ok;
 		%% there is a negative result 
-		{_,  Error} -> hd(Error)
+		{_,  Error} -> 
+         clue:inc({ambit, req, failure}),
+         hd(Error)
 	end;
 
 unit(whereis, Values) ->
+   clue:inc({ambit, req, success}),
 	[X || X <- Values, is_pid(X)].
 
+%%
+%% check if requires meet sloppy quorum 
+quorum(#{n := N, peer := Peers}) ->
+   length(Peers) >= N.
 
 
 

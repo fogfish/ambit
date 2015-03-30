@@ -5,8 +5,11 @@
 -export([behaviour_info/1]).
 -export([
    spawn/2,
+   spawn/3,
    free/1,
+   free/2,
    whereis/1,
+   whereis/2,
    successors/1,
    predecessors/1,
    sibling/2
@@ -43,24 +46,42 @@ behaviour_info(_) ->
 
 %%
 %% spawn service on the cluster
+%%  Options
+%%    w - number of succeeded writes
 -spec(spawn/2 :: (any(), any()) -> ok | {error, any()}).
+-spec(spawn/3 :: (any(), any(), list()) -> ok | {error, any()}).
 
 spawn(Key, Service) ->
-   ambit_coordinator:call(Key, {spawn, Key, Service}).
+	ambit:spawn(Key, Service, []).
+
+spawn(Key, Service, Opts) ->
+   ambit_coordinator:call(Key, {spawn, Key, Service}, Opts).
 
 %%
 %% free service on the cluster
+%%  Options
+%%    w - number of succeeded writes
 -spec(free/1 :: (any()) -> ok | {error, any()}).
+-spec(free/2 :: (any(), list()) -> ok | {error, any()}).
 
 free(Key) ->
-   ambit_coordinator:call(Key, {free, Key}).
+	free(Key, []).
+
+free(Key, Opts) ->
+   ambit_coordinator:call(Key, {free, Key}, Opts).
 
 %%
 %% lookup service end-point
+%%  Options
+%%    r - number of succeeded reads
 -spec(whereis/1 :: (any()) -> [pid()]).
+-spec(whereis/2 :: (any(), list()) -> [pid()]).
 
 whereis(Key) ->
-   ambit_coordinator:call(Key, {whereis, Key}).
+	whereis(Key, []).
+
+whereis(Key, Opts) ->
+   ambit_coordinator:call(Key, {whereis, Key}, Opts).
 
 %%
 %% return list of successor nodes in ambit cluster
@@ -68,7 +89,7 @@ whereis(Key) ->
 -spec(successors/1 :: (any()) -> [ek:vnode()]).
 
 successors(Key) ->
-   [{A, B, C, erlang:node(D)} || {A, B, C, D} <- sibling(fun ek:successors/2, Key)].
+   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- sibling(fun ek:successors/2, Key)].
 
 %%
 %% return list of successor nodes in ambit cluster
@@ -76,7 +97,7 @@ successors(Key) ->
 -spec(predecessors/1 :: (any()) -> [ek:vnode()]).
 
 predecessors(Key) ->
-   [{A, B, C, erlang:node(D)} || {A, B, C, D} <- sibling(fun ek:predecessors/2, Key)].
+   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- sibling(fun ek:predecessors/2, Key)].
 
 
 %%

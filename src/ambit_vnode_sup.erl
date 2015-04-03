@@ -39,10 +39,12 @@ init([Addr]) ->
            
            ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
             %% @todo: make gossip configurable (enable/disable + timeouts)
-           ,?CHILD(worker, gossip,  [[
-               {session, ?CONFIG_TIMEOUT_GOSSIP}
-              ,{timeout, ?CONFIG_TIMEOUT_REQ}
-              ,{adapter, {ambit_vnode_gossip, [Vnode]}}
+           ,?CHILD(worker, aae,  [[
+               {session,  ?CONFIG_AAE_TIMEOUT}
+              ,{timeout,  ?CONFIG_TIMEOUT_REQ}
+              ,{capacity, ?CONFIG_AAE_CAPACITY}
+              ,{strategy, all}
+              ,{adapter,  {ambit_vnode_aae, [Vnode]}}
             ]])
          ]
       }

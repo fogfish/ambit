@@ -20,8 +20,7 @@
    'read-through'
   ,{keylen,      inf}
   ,{supervisor,  ambit_vnode_sup}
-  % ,{factory,     transient}
-  ,{factory,     permanent}
+  ,{factory,     transient}
 ]).
 
 %%
@@ -47,9 +46,15 @@
 -endif.
 
 %%
-%% anti entropy frequency in milliseconds
--ifndef(CONFIG_TIMEOUT_GOSSIP).
--define(CONFIG_TIMEOUT_GOSSIP,   {120000, 1.0}).
+%% active anti entropy configuration
+%%  * frequency in milliseconds
+%%  * capacity number of parallel sessions
+-ifndef(CONFIG_AAE_TIMEOUT).
+-define(CONFIG_AAE_TIMEOUT,   {120000, 1.0}).
+-endif.
+
+-ifndef(CONFIG_AAE_CAPACITY).
+-define(CONFIG_AAE_CAPACITY,  5).
 -endif.
 
 

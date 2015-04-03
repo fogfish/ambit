@@ -26,7 +26,7 @@ start_link() ->
    pipe:start_link(?MODULE, [], []).
 
 init(_) ->
-   lager:md([{ambit, tx}]),
+   lager:md([{ambit, req}]),
    {ok, idle, #{}}.
 
 free(_, _) ->

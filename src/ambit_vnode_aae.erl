@@ -10,9 +10,7 @@
   ,peers/1
   ,session/2
   ,handshake/3
-  ,chunks/1
   ,snapshot/1
-  ,snapshot/2
   ,diff/4
 ]).
 
@@ -52,23 +50,12 @@ handshake(Peer, Req, State) ->
    State.
 
 %%
-%% return chunk(s) to apply anti-entropy
--spec(chunks/1 :: (ek:vnode()) -> {list(), ek:vnode()}).
-
-chunks(State) ->
-   {[], State}.  
-
-%%
 %% make snapshot, returns key/val stream 
 -spec(snapshot/1 :: (ek:vnode()) -> {datum:stream(), ek:vnode()}).
--spec(snapshot/2 :: (list(), ek:vnode()) -> {datum:stream(), ek:vnode()}).
 
 snapshot({_, Addr, _, _}=State) ->
    Stream = stream:build(pns:lookup(Addr, '_')),
    {Stream, State}.
-
-snapshot(_, State) ->
-   snapshot(State).
 
 %%
 %% remote peer diff, called for each key, order is arbitrary 

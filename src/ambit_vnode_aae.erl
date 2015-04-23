@@ -11,7 +11,7 @@
   ,session/2
   ,handshake/3
   ,snapshot/1
-  ,diff/4
+  ,diff/3
 ]).
 
 
@@ -54,15 +54,15 @@ handshake(Peer, Req, State) ->
 -spec(snapshot/1 :: (ek:vnode()) -> {datum:stream(), ek:vnode()}).
 
 snapshot({_, Addr, _, _}=State) ->
-   Stream = stream:build(pns:lookup(Addr, '_')),
+   Stream = stream:build([{Name, Name} || {Name, _Pid} <- pns:lookup(Addr, '_')]),
    {Stream, State}.
 
 %%
 %% remote peer diff, called for each key, order is arbitrary 
 %%
--spec(diff/4 :: (ek:vnode(), binary(), pid(), ek:vnode()) -> ok).
+-spec(diff/3 :: (ek:vnode(), binary(), ek:vnode()) -> ok).
 
-diff(Peer, Name, _Pid, {_, Addr, _, _}) ->
+diff(Peer, Name, {_, Addr, _, _}) ->
    Service = ambit_actor:service(Addr, Name),
    Vnode   = erlang:setelement(1, Peer, primary),
    Tx = ambit_peer:cast(Vnode, {spawn, Name, Service}),

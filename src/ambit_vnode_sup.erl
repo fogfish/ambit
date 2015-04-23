@@ -6,7 +6,7 @@
 -include("ambit.hrl").
 
 -export([
-   start_link/2, init/1
+   start_link/3, init/1
 ]).
 
 %%
@@ -20,12 +20,10 @@
 %%
 %%-----------------------------------------------------------------------------
 
-start_link(vnode, Addr) ->
-   supervisor:start_link(?MODULE, [Addr]).
+start_link(vnode, Addr, Vnode) ->
+   supervisor:start_link(?MODULE, [Addr, Vnode]).
    
-init([Addr]) ->
-   %% discover vnode definition for given address
-   Vnode = hd(ek:successors(ambit, Addr)),
+init([Addr, Vnode]) ->
    {ok,
       {
          {one_for_one, 0, 1},
@@ -39,6 +37,7 @@ init([Addr]) ->
            
            ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
             %% @todo: make gossip configurable (enable/disable + timeouts)
+            %% @todo: disable gossip (repair for hand-off)
            ,?CHILD(worker, aae,  [[
                {session,  ?CONFIG_AAE_TIMEOUT}
               ,{timeout,  ?CONFIG_TIMEOUT_REQ}

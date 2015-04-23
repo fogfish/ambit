@@ -106,7 +106,7 @@ predecessors(Key) ->
 
 sibling(Fun, Key) ->
    case
-      lists:splitwith(
+      lists:partition(
          fun({X, _, _, _}) -> X =/= primary end,
          Fun(ambit, Key)
       )

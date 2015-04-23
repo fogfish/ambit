@@ -4,7 +4,7 @@
 -behaviour(pipe).
 
 -export([
-   start_link/0
+   start_link/1
   ,init/1
   ,free/2
   ,ioctl/2
@@ -17,7 +17,7 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link() ->
+start_link(_Type) ->
    pipe:start_link(?MODULE, [], []).
 
 init(_) ->

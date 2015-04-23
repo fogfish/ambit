@@ -18,6 +18,8 @@
   ,send/2
 ]).
 
+%% @todo: vnode management api
+
 %%%----------------------------------------------------------------------------   
 %%%
 %%% Factory
@@ -52,10 +54,10 @@ ioctl(_, _) ->
 
 %%
 %% lease transaction coordinator 
--spec(coordinator/1 :: (pid()) -> any()).
+-spec(coordinator/1 :: (ek:vnode()) -> any()).
 
-coordinator(Peer) ->
-   pipe:call(Peer, coordinator, infinity).
+coordinator({_, _, _, Pid}) ->
+   pipe:call(Pid, coordinator, infinity).
 
 %%
 %% get vnode status 
@@ -63,7 +65,6 @@ coordinator(Peer) ->
 
 i({_, _, _, Peer} = Vnode) ->
 	pipe:call(Peer, {i, Vnode}).
-
 
 %%
 %% cast message to vnode
@@ -99,8 +100,8 @@ handle({i, {_, Addr, _, _}}, Pipe, State) ->
 	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
    {next_state, handle, State};
 
-handle({cast, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
-   case ensure(Node, Addr) of
+handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
+   case ensure(Node, Vnode) of
       {ok,    _} ->
          pipe:emit(Pipe, lookup(Vnode), Msg),
          {next_state, handle, State};
@@ -109,8 +110,8 @@ handle({cast, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
          {next_state, handle, State}
    end;
 
-handle({send, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
-   case ensure(Node, Addr) of
+handle({send, Vnode, Msg}, Pipe, #{node := Node}=State) ->
+   case ensure(Node, Vnode) of
       {ok,    _} ->
          pipe:emit(Pipe, lookup(Vnode), Msg),
          {next_state, handle, State};
@@ -118,13 +119,6 @@ handle({send, {_, Addr, _, _} = Vnode, Msg}, Pipe, #{node := Node}=State) ->
          pipe:a(Pipe, Error),
          {next_state, handle, State}
    end;
-   % case pns:whereis(vnode, {Hand, Addr}) of
-   %    undefined ->
-   %       {next_state, handle, State};
-   %    Pid ->
-   %       pipe:emit(Pipe, Pid, Msg),
-   %       {next_state, handle, State}
-   % end;
 
 %%
 %%
@@ -151,18 +145,12 @@ handle(_Msg, _Pipe, State) ->
 
 %%
 %% ensure vnode is running
-ensure(Node, Addr) ->
+ensure(_Node, {_, Addr, _, _}=Vnode) ->
    case pns:whereis(vnode, Addr) of
-      %% vnode is not running but it can be created only if addr is manageable by peer 
       undefined ->
-         case lists:keyfind(Node, 3, ek:successors(ambit, Addr)) of
-            false ->
-               {error,  eaddrnotavail};
-            _     ->
-               pts:ensure(vnode, Addr)
-         end;
-      Vnode     ->
-         {ok, Vnode}
+         pts:ensure(vnode, Addr, [Vnode]);
+      Pid       ->
+         {ok, Pid}
    end.
 
 %%

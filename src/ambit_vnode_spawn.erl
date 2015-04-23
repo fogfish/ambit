@@ -22,10 +22,9 @@
 start_link(Vnode) ->
    pipe:start_link(?MODULE, [Vnode], []).
 
-init([{_, Addr, _, _}=Vnode]) ->
+init([{Type, Addr, _, _}=Vnode]) ->
    ?DEBUG("ambit [spawn]: init ~p", [Vnode]),
-   ok = pns:register(vnode, {primary, Addr}, self()),
-   ok = pns:register(vnode, {handoff, Addr}, self()),
+   ok = pns:register(vnode, {Type, Addr}, self()),
    {ok, handle, Vnode}.
 
 free(_, _Vnode) ->
@@ -42,11 +41,15 @@ ioctl(_, _) ->
 
 %%
 %%
-% handle({{primary, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
-% handle({{handoff, _, _, _}, {spawn, Name, Service}}, Pipe, State) ->
-handle({spawn, Name, Service}, Pipe, {_, Addr, _, _}=State) ->
+handle({spawn, Name, Service}, Pipe, {primary, Addr, _, _}=State) ->
    pipe:a(Pipe, 
       pts:ensure(Addr, Name, [primary, Service])
+   ),
+   {next_state, handle, State};
+
+handle({spawn, Name, Service}, Pipe, {handoff, Addr, _, _}=State) ->
+   pipe:a(Pipe, 
+      pts:ensure(Addr, Name, [handoff, Service])
    ),
    {next_state, handle, State};
 

@@ -22,25 +22,24 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(Sup, State, Addr, Name, Service) ->
-   pipe:start_link(?MODULE, [Sup, State, Addr, Name, Service], []).
+start_link(Sup, Ns, Name, Vnode, Service) ->
+   pipe:start_link(?MODULE, [Sup, Ns, Name, Vnode, Service], []).
 
-init([Sup, Type, Addr, Name, Service]) ->
-   ?DEBUG("ambit [actor]: init ~s ~p (~p) ~p", [Type, Name, Service, {Addr, Name, actor}]),
-   _ = pns:register(Addr, Name, self()),
+init([Sup, Ns, Name, Vnode, Service]) ->
+   ?DEBUG("ambit [actor]: ~p init ~p ~p", [Vnode, Name, Service]),
+   _ = pns:register(Ns, Name, self()),
    erlang:send(self(), spawn),
    {ok, handle, 
       #{
          sup     => Sup, 
-         addr    => Addr, 
-         type    => Type,
+         vnode   => Vnode, 
          name    => Name, 
          service => Service,
          process => undefined
       }
    }.
 
-free(_, #{sup := Sup, addr := Addr}) ->
+free(_, #{sup := Sup, vnode := {_, Addr, _, _}}) ->
    supervisor:terminate_child(pts:i(factory, Addr), Sup),
    ok.
 
@@ -65,8 +64,9 @@ service(Addr, Name) ->
 
 %%
 %%
-handle(spawn, _, #{sup := Sup, addr := Addr, type := Type, name := Name, service := {Mod, Fun, Args}} = State) ->
-   {ok, Root} = ambit_actor_sup:start_child(Sup, {Mod, Fun, [Type | Args]}),
+handle(spawn, _, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode, 
+                   name := Name, service := {Mod, Fun, Args}} = State) ->
+   {ok, Root} = ambit_actor_sup:start_child(Sup, {Mod, Fun, [Vnode | Args]}),
 	case erlang:function_exported(Mod, actor, 1) of
       true  ->
 			{ok, Pid} = Mod:actor(Root),
@@ -76,7 +76,7 @@ handle(spawn, _, #{sup := Sup, addr := Addr, type := Type, name := Name, service
    end,
    {next_state, handle, State#{process := Root}};
 
-handle(free, _, #{addr := Addr, name := Name}=State) ->
+handle(free, _, #{vnode := {_, Addr, _, _}, name := Name}=State) ->
    _ = pns:unregister(ambit, {Addr, Name}),
    _ = pns:unregister(Addr, Name),
    {stop, normal, State};

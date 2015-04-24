@@ -50,7 +50,7 @@ ioctl(_, _) ->
 
 %%
 %%
-active({handoff, Vnode}, _, #{vnode := {_, Addr, _, _} = Self}=State) ->
+active({handoff, Vnode}, _, #{vnode := {primary, Addr, _, _} = Self}=State) ->
    %% initial child transfer procedure
    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Self, Vnode]),
    erlang:send(self(), transfer),
@@ -60,6 +60,11 @@ active({handoff, Vnode}, _, #{vnode := {_, Addr, _, _} = Self}=State) ->
          stream => stream:build(pns:lookup(Addr, '_'))
       }
    };
+
+active({handoff, Vnode}, _, #{vnode := {handoff, Addr, _, _} = Self}=State) ->
+   %% initial child transfer procedure
+   ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Self, Vnode]),
+   {stop, normal, State};
 
 active(_Msg, _, State) ->
    ?WARNING("ambit [vnode]: unexpected message ~p", [_Msg]),

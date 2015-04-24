@@ -41,37 +41,27 @@ ioctl(_, _) ->
 
 %%
 %%
-handle({spawn, Name, Service}, Pipe, {primary, Addr, _, _}=State) ->
+handle({spawn, Name, Service}, Pipe, {_, Addr, _, _}=Vnode) ->
    pipe:a(Pipe, 
-      pts:ensure(Addr, Name, [primary, Service])
+      pts:ensure(Addr, Name, [Vnode, Service])
    ),
-   {next_state, handle, State};
-
-handle({spawn, Name, Service}, Pipe, {handoff, Addr, _, _}=State) ->
-   pipe:a(Pipe, 
-      pts:ensure(Addr, Name, [handoff, Service])
-   ),
-   {next_state, handle, State};
+   {next_state, handle, Vnode};
 
 %%
-% handle({{primary, _, _, _}, {free, Name}}, Pipe, State) ->
-% handle({{handoff, _, _, _}, {free, Name}}, Pipe, State) ->
-handle({free, Name}, Pipe, {_, Addr, _, _}=State) ->
+handle({free, Name}, Pipe, {_, Addr, _, _}=Vnode) ->
    pts:send(Addr, Name, free),
    pipe:a(Pipe, ok),
-   {next_state, handle, State};
+   {next_state, handle, Vnode};
 
 %%
-% handle({{primary, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
-% handle({{handoff, Addr, _, _}, {whereis, Name}}, Pipe, State) ->
-handle({whereis, Name}, Pipe, {_, Addr, _, _}=State) ->
+handle({whereis, Name}, Pipe, {_, Addr, _, _}=Vnode) ->
    pipe:a(Pipe, 
       pns:whereis(ambit, {Addr, Name})
    ),
-   {next_state, handle, State};
+   {next_state, handle, Vnode};
 
-handle(_, _Tx, State) ->
-   {next_state, handle, State}.
+handle(_, _Tx, Vnode) ->
+   {next_state, handle, Vnode}.
 
 
 

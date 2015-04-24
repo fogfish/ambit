@@ -22,15 +22,15 @@
 %%
 %%-----------------------------------------------------------------------------
 
-start_link(Addr, Name, State, Service) ->
-   supervisor:start_link(?MODULE, [State, Addr, Name, Service]).
+start_link(Ns, Name, Vnode, Service) ->
+   supervisor:start_link(?MODULE, [Ns, Name, Vnode, Service]).
    
-init([State, Addr, Name, Service]) ->   
+init([Ns, Name, Vnode, Service]) ->   
    {ok,
       {
          {one_for_all, 0, 1},
          [
-            ?CHILD(worker, actor, ambit_actor, [self(), State, Addr, Name, Service])
+            ?CHILD(worker, actor, ambit_actor, [self(), Ns, Name, Vnode, Service])
          ]
       }
    }.

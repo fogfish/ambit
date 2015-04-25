@@ -123,6 +123,7 @@ suspend(_, _, State) ->
 transfer({Tx, _Result}, _, #{tx := Tx, vnode := {_, Addr, _, _}, handoff := Handoff, stream := Stream}=State) ->
    ?DEBUG("ambit [vnode]: transfer ~p", [_Result]),
    {Name, _Pid} = stream:head(Stream),
+   %% @todo: make asynchronous handoff with long-term expectation of data transfer
    ambit_actor:handoff(Addr, Name, Handoff),
    erlang:send(self(), transfer),
    {next_state, suspend, State#{stream => stream:tail(Stream)}};
@@ -131,51 +132,6 @@ transfer(timeout, _, State) ->
    erlang:send_after(1000, self(), transfer),
    {next_state, suspend, State}.
    
-
-
-
-% active({handoff, Vnode}, _, #{vnode := {primary, Addr, _, _} = Self}=State) ->
-%    %% initial child transfer procedure
-%    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Self, Vnode]),
-%    erlang:send(self(), transfer),
-%    {next_state, transfer, 
-%       State#{
-%          target => Vnode,
-%          stream => stream:build(pns:lookup(Addr, '_'))
-%       }
-%    };
-
-% active({handoff, Vnode}, _, #{vnode := {handoff, Addr, _, _} = Self}=State) ->
-%    %% initial child transfer procedure
-%    %% @todo: actor state management
-%    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Self, Vnode]),
-%    {stop, normal, State};
-
-% active(_Msg, _, State) ->
-%    ?WARNING("ambit [vnode]: unexpected message ~p", [_Msg]),
-%    {next_state, active, State}.
-
-
-% transfer(transfer, _, #{vnode := {_, Addr, _, _}, target := Vnode, stream := Stream}=State) ->
-%    {Name, _Pid} = stream:head(Stream),
-%    Service      = ambit_actor:service(Addr, Name),
-%    Tx = ambit_peer:cast(Vnode, {spawn, Name, Service}),
-%    ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
-%    {next_state, transfer, State#{tx => Tx}, 5000}; %% @todo: config
-
-% transfer({Tx, _Result}, _, #{tx := Tx, stream := Stream}=State) ->
-%    ?DEBUG("ambit [vnode]: transfer ~p", [_Result]),
-%    erlang:send(self(), transfer),
-%    {next_state, transfer, State#{stream => stream:tail(Stream)}};
-
-% transfer(timeout, _, State) ->
-%    erlang:send_after(1000, self(), transfer),
-%    {next_state, transfer, State};
-
-% transfer(Msg, _, State) ->
-%    ?WARNING("ambit [vnode]: unexpected message ~p", [Msg]),
-%    {next_state, transfer, State}.
-
 %%%----------------------------------------------------------------------------   
 %%%
 %%% private

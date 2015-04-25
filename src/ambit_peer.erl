@@ -122,16 +122,18 @@ handle({send, Vnode, Msg}, Pipe, #{node := Node}=State) ->
 
 %%
 %%
-handle({join, _Peer, _Pid}, _Tx, #{node := Node} = State) ->
+handle({join, Peer, _Pid}, _Tx, State) ->
    %% new node joined cluster, all local v-nodes needs to be checked
    %% if relocation condition is met
-   ?NOTICE("ambit [peer]: join ~s", [_Peer]),
-	pts:foreach(fun(Addr, _) -> handoff(Addr, Node) end, vnode),
+   ?NOTICE("ambit [peer]: join ~p", [Peer]),
+	pts:foreach(fun(Addr, _) -> handoff(Addr, Peer) end, vnode),
    {next_state, handle, State};
 
 % handle({handoff, _Peer}) ->
+%  peer temporary down
 
 % handle({leave, _Peer}) ->
+%  peer permanently down
 
 handle(_Msg, _Pipe, State) ->
    {next_state, handle, State}.
@@ -145,12 +147,20 @@ handle(_Msg, _Pipe, State) ->
 
 %%
 %% ensure vnode is running
-ensure(_Node, {_, Addr, _, _}=Vnode) ->
+ensure(_Node, {handoff, Addr, Peer, Pid}) ->
    case pns:whereis(vnode, Addr) of
       undefined ->
-         pts:ensure(vnode, Addr, [Vnode]);
-      Pid       ->
-         {ok, Pid}
+         pts:ensure(vnode, Addr, [{handoff, Addr, Peer, Pid}]);
+      Vnode     ->
+         {ok, Vnode}
+   end;
+
+ensure(_Node, {_, Addr, Peer, Pid}) ->
+   case pns:whereis(vnode, Addr) of
+      undefined ->
+         pts:ensure(vnode, Addr, [{primary, Addr, Peer, Pid}]);
+      Vnode     ->
+         {ok, Vnode}
    end.
 
 %%
@@ -159,18 +169,8 @@ lookup({Hand,  Addr, _, _}) ->
    pns:whereis(vnode, {Hand, Addr}).
 
 %%
-%% hand-off vnode
+%%
 handoff({_, _},  _) ->
-	ok;
-handoff(Addr, Node) ->
-	[Vnode | _] = List = ek:successors(ambit, Addr),
-	case 
-      lists:keyfind(Node, 3, List)
-   of
-      false ->
-         pts:send(vnode, Addr, {handoff, Vnode});
-      _     ->
-         ok
-   end.
-
-
+   ok;
+handoff(Addr, Peer) ->
+   pts:send(vnode, Addr, {handoff, Peer}).

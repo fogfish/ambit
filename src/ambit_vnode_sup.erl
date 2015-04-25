@@ -39,9 +39,9 @@ init([Addr, Vnode]) ->
             %% @todo: make gossip configurable (enable/disable + timeouts)
             %% @todo: disable gossip (repair for hand-off)
            ,?CHILD(worker, aae,  [[
-               {session,  ?CONFIG_AAE_TIMEOUT}
+               {session,  opts:val(aae, ?CONFIG_AAE_TIMEOUT, ambit)}
               ,{timeout,  ?CONFIG_TIMEOUT_REQ}
-              ,{capacity, ?CONFIG_AAE_CAPACITY}
+              ,{capacity, opts:val(aae_capacity, ?CONFIG_AAE_CAPACITY, ambit)}
               ,{strategy, aae}
               ,{adapter,  {ambit_vnode_aae, [Vnode]}}
             ]])

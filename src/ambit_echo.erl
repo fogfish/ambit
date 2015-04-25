@@ -3,6 +3,8 @@
 -module(ambit_echo).
 -behaviour(pipe).
 
+-include("ambit.hrl").
+
 -export([
    start_link/1
   ,init/1
@@ -17,11 +19,11 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(_Vnode) ->
-   pipe:start_link(?MODULE, [], []).
+start_link(Vnode) ->
+   pipe:start_link(?MODULE, [Vnode], []).
 
-init(_) ->
-   {ok, handle, #{}}.
+init([Vnode]) ->
+   {ok, handle, Vnode}.
 
 free(_, _) ->
    ok.
@@ -34,6 +36,16 @@ ioctl(_, _) ->
 %%% pipe
 %%%
 %%%----------------------------------------------------------------------------   
+
+handle({handoff, Vnode}, Tx, {primary, _, _, _}=State) ->
+   ?ERROR("ambit [actor]: data transfer to ~p", [Vnode]),
+   pipe:ack(Tx, ok),
+   {next_state, handle, State};
+
+handle({handoff, Vnode}, Tx, {handoff, _, _, _}=State) ->
+   ?ERROR("ambit [actor]: hint gossip with ~p", [Vnode]),
+   pipe:ack(Tx, ok),
+   {next_state, handle, State};
 
 handle(Msg, Tx, State) ->
    pipe:ack(Tx, Msg),

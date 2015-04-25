@@ -13,6 +13,7 @@
   ,handle/3
    %% api
   ,service/2
+  ,handoff/3
 ]).
 
 
@@ -56,6 +57,10 @@ ioctl(_, _) ->
 service(Addr, Name) ->
    pts:call(Addr, Name, service).
 
+%% handoff actor 
+handoff(Addr, Name, Vnode) ->
+   pts:call(Addr, Name, {handoff, Vnode}).
+
 %%%----------------------------------------------------------------------------   
 %%%
 %%% pipe
@@ -70,11 +75,12 @@ handle(spawn, _, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode,
 	case erlang:function_exported(Mod, actor, 1) of
       true  ->
 			{ok, Pid} = Mod:actor(Root),
-			_ = pns:register(ambit, {Addr, Name}, Pid);
+			_ = pns:register(ambit, {Addr, Name}, Pid),
+         {next_state, handle, State#{process := Pid}};
       false ->
-			_ = pns:register(ambit, {Addr, Name}, Root)
-   end,
-   {next_state, handle, State#{process := Root}};
+			_ = pns:register(ambit, {Addr, Name}, Root),
+         {next_state, handle, State#{process := Root}}
+   end;
 
 handle(free, _, #{vnode := {_, Addr, _, _}, name := Name}=State) ->
    _ = pns:unregister(ambit, {Addr, Name}),
@@ -87,6 +93,10 @@ handle(service, Tx, #{service := Service}=State) ->
 
 handle(process, Tx, #{process := Process}=State) ->
    pipe:ack(Tx, Process),
+   {next_state, handle, State};
+
+handle({handoff, Vnode}, Tx, #{process := Process}=State) ->
+   pipe:emit(Tx, Process, {handoff, Vnode}),
    {next_state, handle, State};
 
 handle(_, _, State) ->

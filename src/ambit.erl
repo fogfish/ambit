@@ -2,6 +2,8 @@
 %%   distributed actors
 -module(ambit).
 
+%% @todo: write-repair (if handoff node do not exist during write)
+
 -export([behaviour_info/1]).
 -export([
    spawn/2,

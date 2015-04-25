@@ -42,7 +42,7 @@ init([Addr, Vnode]) ->
                {session,  ?CONFIG_AAE_TIMEOUT}
               ,{timeout,  ?CONFIG_TIMEOUT_REQ}
               ,{capacity, ?CONFIG_AAE_CAPACITY}
-              ,{strategy, all}
+              ,{strategy, aae}
               ,{adapter,  {ambit_vnode_aae, [Vnode]}}
             ]])
          ]

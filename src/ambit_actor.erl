@@ -36,6 +36,7 @@ init([Sup, Ns, Name, Vnode, Service]) ->
          vnode   => Vnode, 
          name    => Name, 
          service => Service,
+         actor   => undefined,
          process => undefined
       }
    }.
@@ -72,14 +73,14 @@ handoff(Addr, Name, Vnode) ->
 handle(spawn, _, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode, 
                    name := Name, service := {Mod, Fun, Args}} = State) ->
    {ok, Root} = ambit_actor_sup:start_child(Sup, {Mod, Fun, [Vnode | Args]}),
-	case erlang:function_exported(Mod, actor, 1) of
+	case erlang:function_exported(Mod, process, 1) of
       true  ->
-			{ok, Pid} = Mod:actor(Root),
+			{ok, Pid} = Mod:process(Root),
 			_ = pns:register(ambit, {Addr, Name}, Pid),
-         {next_state, handle, State#{process := Pid}};
+         {next_state, handle, State#{actor := Root, process := Pid}};
       false ->
 			_ = pns:register(ambit, {Addr, Name}, Root),
-         {next_state, handle, State#{process := Root}}
+         {next_state, handle, State#{actor := Root, process := Root}}
    end;
 
 handle(free, _, #{vnode := {_, Addr, _, _}, name := Name}=State) ->
@@ -95,9 +96,17 @@ handle(process, Tx, #{process := Process}=State) ->
    pipe:ack(Tx, Process),
    {next_state, handle, State};
 
-handle({handoff, Vnode}, Tx, #{process := Process}=State) ->
-   pipe:emit(Tx, Process, {handoff, Vnode}),
-   {next_state, handle, State};
+handle({handoff, Vnode}, Tx, #{actor := Root, service := {Mod, _, _}}=State) ->
+   case erlang:function_exported(Mod, handoff, 2) of
+      true  ->
+         pipe:ack(Tx, 
+            Mod:handoff(Root, Vnode)
+         ),
+         {next_state, handle, State};
+      false ->
+         pipe:ack(Tx, ok),
+         {next_state, handle, State}
+   end;
 
 handle(_, _, State) ->
    {next_state, handle, State}.

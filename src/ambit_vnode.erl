@@ -12,11 +12,8 @@
   ,ioctl/2
   ,primary/3
   ,handoff/3
-  ,suspend/3
+  ,suspend/3   %% -> offline
   ,transfer/3
-
-  % ,active/3   % -> primary/3
-  % ,transfer/3 % -> handoff/3
 ]).
 
 %%%----------------------------------------------------------------------------   

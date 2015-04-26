@@ -32,10 +32,16 @@
 behaviour_info(callbacks) ->
    [
       %%
-      %% get identity of actor process 
+      %% return pid of actor process 
       %%
-      %% -spec(actor/1 :: (pid()) -> {ok, pid()} | {error, any()}).
-      {actor, 1}
+      %% -spec(process/2 :: (pid(), atom()) -> {ok, any()} | {error, any()}).
+      {process,   1}
+
+      %%
+      %% initiate actor handoff procedure
+      %%
+      %% -spec(handoff/2 :: (pid(), ek:vnode()) -> ok).
+     ,{handoff,   2}
 	];
 behaviour_info(_) ->
    undefined.

@@ -54,7 +54,7 @@ handshake(Peer, Req, State) ->
 -spec(snapshot/1 :: (ek:vnode()) -> {datum:stream(), ek:vnode()}).
 
 snapshot({_, Addr, _, _}=State) ->
-   Stream = stream:build([{Name, Name} || {Name, _Pid} <- pns:lookup(Addr, '_')]),
+   Stream = stream:build([Name || {Name, _Pid} <- pns:lookup(Addr, '_')]),
    {Stream, State}.
 
 %%

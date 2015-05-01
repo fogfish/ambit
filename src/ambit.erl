@@ -154,9 +154,15 @@ i(Addr) ->
 %% RnD application start
 -define(CONFIG, "./priv/app.config").
 start() ->
-	case filelib:is_file(?CONFIG) of
+   File = case code:priv_dir(?MODULE) of
+      {error, _} ->
+         ?CONFIG;
+      Path       ->
+         filename:join([Path, "app.config"])
+   end,
+	case filelib:is_file(File) of
 		true ->
-   		applib:boot(?MODULE, ?CONFIG);
+   		applib:boot(?MODULE, File);
 		_    ->
 			applib:boot(?MODULE, [])
 	end.

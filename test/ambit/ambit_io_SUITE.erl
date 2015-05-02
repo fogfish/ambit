@@ -13,7 +13,9 @@
    end_per_group/2
 ]).
 -export([
-   spawn/1
+   spawn/1,
+   free/1,
+   ping/1
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -27,9 +29,17 @@ all() ->
 
 groups() ->
    [
-      {io_n1,  [parallel, {repeat, 15}], [spawn]},
-      {io_n2,  [parallel, {repeat, 15}], [spawn]},
-      {io_n3,  [parallel, {repeat, 15}], [spawn]}
+      %%
+      %% no quorum - r/w succeeded on single node only
+      {io_n1, [parallel, {repeat, 10}], [spawn]},
+
+      %%
+      %% sloppy quorum - r + w > n, read and write must succeeded on two nodes
+      {io_n2, [parallel, {repeat, 10}], [spawn, free, ping]},
+
+      %%
+      %% strict quorum, each sibling must succeeded
+      {io_n3, [parallel, {repeat, 10}], [spawn]}
    ].
 
 %%%----------------------------------------------------------------------------   
@@ -82,11 +92,35 @@ spawn(Config) ->
          exit(noquorum)
    end.
 
-   % ping / pong test
-   % lists:foreach(
-   %    fun(X) -> test = pipe:call(X, test) end,
-   %    ambit:whereis(Ns)
-   % ).
+
+%%
+%%
+free(Config) ->
+   N   = opts:val(n, Config),
+   Key = key(),
+   ok  = ambit:spawn(Key, {ambit_echo, start_link, []}),
+   ok  = ambit:free(Key),
+   %% free is not committed by each sibling peer due to eventual consistency.
+   %% operation is succeeded when N sibling is committed 
+   case ambit:whereis(Key) of
+      List when length(List) =< 3 - N ->
+         ok;
+      _ ->
+         exit(failed)
+   end.
+
+%%
+%%
+ping(Config) -> 
+   Key  = key(),
+   ok   = ambit:spawn(Key, {ambit_echo, start_link, []}),
+   Ping = [pipe:call(Pid, ping) || Pid <- ambit:whereis(Key)],
+   case length(Ping) of
+      X when X > 0 ->
+         ok;
+      _ ->
+         exit(noquorum)
+   end.
 
 
 %%%----------------------------------------------------------------------------   
@@ -109,6 +143,7 @@ cluster_pending_peers(N) ->
 %%
 %%
 key() ->
+   random:seed(erlang:now()),
    scalar:s(random:uniform(1 bsl 32)).
 
 

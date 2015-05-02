@@ -1,6 +1,7 @@
 %% @description
 %%   distributed actors
 -module(ambit).
+-include("ambit.hrl").
 
 %% @todo: write-repair (if handoff node do not exist during write)
 
@@ -106,7 +107,6 @@ successors(Key) ->
 
 predecessors(Key) ->
    [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- sibling(fun ek:predecessors/2, Key)].
-
 
 %%
 %% return list of sibling nodes

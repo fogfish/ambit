@@ -64,20 +64,6 @@ call([Peer | Peers], Key, Req, Opts) ->
 call([], _Key, _Req0, _Opts) ->
    {error, ebusy}.
 
-   % Req1 = ambit_req:new(Req0, Opts),
-   % {Pid, Req2} = ambit_req:whois(Key, Req1),
-   % case ambit_req:quorum(Req2) of
-   %    false ->
-   %       {error, quorum};
-   %    true  ->
-   %       case ambit_req:lease(Pid, Req2) of
-   %          {error, _} = Error ->
-   %             Error;
-   %          {UoW, Req3} ->
-   %             pipe:call(UoW, Req3, ambit_req:t(Req3))
-   %       end
-   % end.
-
 %%%----------------------------------------------------------------------------   
 %%%
 %%% fsm
@@ -87,12 +73,15 @@ call([], _Key, _Req0, _Opts) ->
 %%
 %%
 idle({req, UoW, Key, Req, Opts}, Pipe, _State) ->
-   ?NOTICE("request ~p", [Req]),
+   ?NOTICE("coordinate ~p request ~p", [Key, Req]),
    Peers = ambit:sibling(fun ek:successors/2, Key), 
    case 
       opts:val(r, opts:val(w, ?CONFIG_N, Opts), Opts)
    of
       N when N > length(Peers) ->
+         %% the ring return N distinct successors
+         %% the small cluster fails to meet the requirement due to ring algorithm
+         ?NOTICE("no quorum ~p, successors ~p", [Key, Peers]),
          release(accept({error, quorum}, #{uow => UoW, pipe => Pipe})),
          {next_state, idle, #{}};
       _ ->

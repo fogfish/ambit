@@ -129,11 +129,15 @@ handle({join, Peer, _Pid}, _Tx, State) ->
 	pts:foreach(fun(Addr, _) -> handoff(Addr, Peer) end, vnode),
    {next_state, handle, State};
 
-% handle({handoff, _Peer}) ->
-%  peer temporary down
+handle({handoff, _Peer}, _Tx, State) ->
+   %%  peer temporary down
+   ?NOTICE("ambit [peer]: handoff ~p", [_Peer]),
+   {next_state, handle, State};
 
-% handle({leave, _Peer}) ->
-%  peer permanently down
+handle({leave, _Peer}, _Tx, State) ->
+   %%  peer permanently down
+   ?NOTICE("ambit [peer]: leave ~p", [_Peer]),
+   {next_state, handle, State};
 
 handle(_Msg, _Pipe, State) ->
    {next_state, handle, State}.

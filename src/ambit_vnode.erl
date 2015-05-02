@@ -55,6 +55,8 @@ free(_Reason, #{sup := Sup, vnode := {_, Addr, _, _}}) ->
    supervisor:terminate_child(pts:i(factory, vnode), Sup),
    ok.
 
+ioctl(vnode, #{vnode := Vnode}) ->
+   Vnode;
 ioctl(_, _) ->
    throw(not_implemented).
 
@@ -67,37 +69,35 @@ ioctl(_, _) ->
 %%
 %%
 primary({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
-   case handoff_peer(Peer, Vnode) of
-      false   ->
-         {next_state, primary, State};
-      Handoff ->
-         ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Handoff]),
-         erlang:send(self(), transfer),
-         {next_state, suspend, 
-            State#{
-               handoff => Handoff,
-               stream  => stream:build(pns:lookup(Addr, '_'))
-            }
-         }
-   end.
+   ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
+   erlang:send(self(), transfer),
+   {next_state, suspend, 
+      State#{
+         handoff => Peer,
+         stream  => stream:build(pns:lookup(Addr, '_'))
+      }
+   };
 
+primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
+   ?NOTICE("ambit [vnode]: sync ~p with ~p", [Vnode, Peer]),
+   {next_state, primary, State}.
 
 %%
 %%
 handoff({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
-   case handoff_peer(Peer, Vnode) of
-      false   ->
-         {next_state, handoff, State};
-      Handoff ->
-         ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Handoff]),
-         erlang:send(self(), transfer),
-         {next_state, suspend, 
-            State#{
-               handoff => Handoff,
-               stream  => stream:build(pns:lookup(Addr, '_'))
-            }
-         }
-   end.
+   ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
+   erlang:send(self(), transfer),
+   {next_state, suspend, 
+      State#{
+         handoff => Peer,
+         stream  => stream:build(pns:lookup(Addr, '_'))
+      }
+   };
+
+handoff({sync, _Peer}, _, State) ->
+   %% do nothing, hint db is not synchronized
+   {next_state, handoff, State}.
+
 
 %%
 %%
@@ -135,32 +135,5 @@ transfer(timeout, _, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%% 
-handoff_peer(Peer, {primary, Addr, Node, _}) ->
-   List = ek:successors(ambit, Addr),
-   case
-      {lists:keyfind(Peer, 3, List), lists:keyfind(Node, 3, List)}
-   of
-      {false,     _} ->
-         false;
-      {Vnode, false} ->   
-         Vnode;
-      {_, _} ->
-         false
-   end;
-
-handoff_peer(Peer, {handoff, Addr, Node, _}) ->
-   List = ek:successors(ambit, Addr),
-   case
-      {lists:keyfind(Peer, 3, List), lists:keyfind(Node, 3, List)}
-   of
-      {false,     _} ->
-         false;
-      {Vnode, Vnode} ->   
-         Vnode;
-      {_, _} ->
-         false
-   end.
 
 

@@ -126,17 +126,19 @@ handle({join, Peer, _Pid}, _Tx, State) ->
    %% new node joined cluster, all local v-nodes needs to be checked
    %% if relocation condition is met
    ?NOTICE("ambit [peer]: join ~p", [Peer]),
-	pts:foreach(fun(Addr, _) -> handoff(Addr, Peer) end, vnode),
+	pts:foreach(fun(Addr, Pid) -> dispatch(Addr, Pid, {join, Peer}) end, vnode),
    {next_state, handle, State};
 
 handle({handoff, _Peer}, _Tx, State) ->
    %%  peer temporary down
    ?NOTICE("ambit [peer]: handoff ~p", [_Peer]),
+   % pts:foreach(fun(Addr, Pid) -> dispatch(Addr, Pid, {handoff, Peer}) end, vnode),
    {next_state, handle, State};
 
 handle({leave, _Peer}, _Tx, State) ->
    %%  peer permanently down
    ?NOTICE("ambit [peer]: leave ~p", [_Peer]),
+   % pts:foreach(fun(Addr, Pid) -> dispatch(Addr, Pid, {leave, Peer}) end, vnode),
    {next_state, handle, State};
 
 handle(_Msg, _Pipe, State) ->
@@ -173,8 +175,45 @@ lookup({Hand,  Addr, _, _}) ->
    pns:whereis(vnode, {Hand, Addr}).
 
 %%
-%%
-handoff({_, _},  _) ->
+%% dispatch cluster event to destination vnode process 
+dispatch({_, _}, _Pid, _Msg) ->
    ok;
-handoff(Addr, Peer) ->
-   pts:send(vnode, Addr, {handoff, Peer}).
+dispatch(_, Pid, Msg) ->
+   dispatch(pipe:ioctl(Pid, vnode), Msg).
+   
+dispatch({primary, Addr, Node, _}, {join, Peer}) ->
+   List = ek:successors(ambit, Addr),
+   case
+      {lists:keyfind(Peer, 3, List), lists:keyfind(Node, 3, List)}
+   of
+      %% joined peer is not part of vnode successor list, skip to next one 
+      {false,     _} ->
+         ok;
+
+      %% joined peer overtake local vnode, initiate handoff operation
+      {Vnode, false} ->   
+         pts:send(vnode, Addr, {handoff, Vnode});
+
+      %% joined peer is sibling to local vnode, initiate node repair
+      {Vnode, _} ->
+         pts:send(vnode, Addr, {sync, Vnode})
+   end;
+
+dispatch({handoff, Addr, Node, _}, {join, Peer}) ->
+   List = ek:successors(ambit, Addr),
+   case
+      {lists:keyfind(Peer, 3, List), Node =:= Peer}
+   of
+      %% joined peer is not part of vnode successor list, skip to next one 
+      {false, _} ->
+         ok;
+
+      %% joined peer overtake local hints, initiate handoff operation
+      {Vnode, true} ->   
+         pts:send(vnode, Addr, {handoff, Vnode});
+      
+      _ ->
+         ok
+   end.
+
+

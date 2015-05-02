@@ -1,5 +1,8 @@
 %% @description
 %%   actor management process
+%%
+%% @todo
+%%   actor signaling
 -module(ambit_actor).
 -behaviour(pipe).
 

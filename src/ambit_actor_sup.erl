@@ -6,10 +6,11 @@
 -behaviour(supervisor).
 
 -export([
-   start_link/4
+   start_link/3
   ,init/1
    %% api
-  ,start_child/2
+  ,init_service/2
+  ,free_service/1
 ]).
 
 %%
@@ -24,15 +25,15 @@
 %%
 %%-----------------------------------------------------------------------------
 
-start_link(Ns, Name, Vnode, Service) ->
-   supervisor:start_link(?MODULE, [Ns, Name, Vnode, Service]).
+start_link(Addr, Key, Vnode) ->
+   supervisor:start_link(?MODULE, [Addr, Key, Vnode]).
    
-init([Ns, Name, Vnode, Service]) ->   
+init([Addr, Key, Vnode]) ->   
    {ok,
       {
          {one_for_all, 0, 1},
          [
-            ?CHILD(worker, actor, ambit_actor, [self(), Ns, Name, Vnode, Service])
+            ?CHILD(worker, actor, ambit_actor, [self(), Addr, Key, Vnode])
          ]
       }
    }.
@@ -45,6 +46,15 @@ init([Ns, Name, Vnode, Service]) ->
 
 %%
 %%
-start_child(Sup, Service) ->
+init_service(Sup, Service) ->
    supervisor:start_child(Sup, ?CHILD(Service)).
+
+
+free_service(Sup) ->
+   supervisor:terminate_child(Sup, service),
+   supervisor:delete_child(Sup, service).
+   
+
+
+
 

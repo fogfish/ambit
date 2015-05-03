@@ -8,20 +8,31 @@
 
 -export([behaviour_info/1]).
 -export([
+   new/1,
+   new/2,
+   get/1
+]).
+-export([
+   spawn/1,
    spawn/2,
-   spawn/3,
+   lookup/1,
+   lookup/2,
    free/1,
    free/2,
    whereis/1,
-   whereis/2,
+   whereis/2
+]).
+
+-export([
    successors/1,
    predecessors/1,
-   sibling/2
-]).
--export([
+   sibling/2,
+   i/1,
    start/0
-  ,i/1
 ]).
+
+-type(key()    :: binary()).
+-type(entity() :: #entity{}).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -55,41 +66,64 @@ behaviour_info(_) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% create service context
-% new(Key) ->
-%    ok.
+%% create service entity
+-spec(new/1 :: (binary()) -> entity()).
+-spec(new/2 :: (binary(), any()) -> entity()).
 
-% new(Key, Service) ->
-%    ok.
+new(Key) ->
+   #entity{key = Key}.
+
+new(Key, Service) ->
+   #entity{key = Key, val = Service}.
+
+%%
+%% get service entity property
+-spec(get/1 :: (entity()) -> any() | undefined).
+
+get(#entity{val = Service}) ->
+   Service.
 
 %%
 %% spawn service on the cluster
 %%  Options
 %%    w - number of succeeded writes
--spec(spawn/2 :: (any(), any()) -> ok | {error, any()}).
--spec(spawn/3 :: (any(), any(), list()) -> ok | {error, any()}).
+-spec(spawn/1 :: (entity()) -> {ok, entity()} | {error, any()}).
+-spec(spawn/2 :: (entity(), list()) -> {ok, entity()} | {error, any()}).
 
-spawn(Key, Service) ->
-	ambit:spawn(Key, Service, []).
+spawn(Entity) ->
+   ambit:spawn(Entity, []).
 
-spawn(Key, Service, Opts) ->
-   ambit_coordinator:call(Key, {spawn, Key, Service}, Opts).
-
+spawn(Entity, Opts) ->
+   ambit_coordinator:create(Entity, Opts).
+   
 %%
 %% free service on the cluster
 %%  Options
 %%    w - number of succeeded writes
--spec(free/1 :: (any()) -> ok | {error, any()}).
--spec(free/2 :: (any(), list()) -> ok | {error, any()}).
+-spec(free/1 :: (entity()) -> {ok, entity()} | {error, any()}).
+-spec(free/2 :: (entity(), list()) -> {ok, entity()} | {error, any()}).
 
-free(Key) ->
-	free(Key, []).
+free(Entity) ->
+	free(Entity, []).
 
-free(Key, Opts) ->
-   ambit_coordinator:call(Key, {free, Key}, Opts).
+free(Entity, Opts) ->
+   ambit_coordinator:remove(Entity, Opts).
 
 %%
-%% lookup service end-point
+%% lookup service on the cluster
+%%  Options
+%%    r - number of succeeded reads
+-spec(lookup/1 :: (key()) -> {ok, entity()} | {error, any()}).
+-spec(lookup/2 :: (key(), any()) -> {ok, entity()} | {error, any()}).
+
+lookup(Key) ->
+   ambit:lookup(Key, []).
+
+lookup(Key, Opts) ->
+   ambit_coordinator:lookup(new(Key), Opts).
+
+%%
+%% lookup service processes
 %%  Options
 %%    r - number of succeeded reads
 -spec(whereis/1 :: (any()) -> [pid()]).
@@ -99,11 +133,10 @@ whereis(Key) ->
 	whereis(Key, []).
 
 whereis(Key, Opts) ->
-   ambit_coordinator:call(Key, {whereis, Key}, Opts).
+   ambit_coordinator:whereis(#entity{key = Key, val = []}, Opts).
 
 %%
 %% return list of successor nodes in ambit cluster
-%% @todo filter unique nodes
 -spec(successors/1 :: (any()) -> [ek:vnode()]).
 
 successors(Key) ->
@@ -111,7 +144,6 @@ successors(Key) ->
 
 %%
 %% return list of successor nodes in ambit cluster
-%% @todo filter unique nodes
 -spec(predecessors/1 :: (any()) -> [ek:vnode()]).
 
 predecessors(Key) ->

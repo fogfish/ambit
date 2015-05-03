@@ -11,7 +11,7 @@
 -include("ambit.hrl").
 
 -export([
-   start_link/5
+   start_link/4
   ,init/1
   ,free/2
   ,ioctl/2
@@ -28,20 +28,19 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(Sup, Ns, Name, Vnode, Service) ->
-   pipe:start_link(?MODULE, [Sup, Ns, Name, Vnode, Service], []).
+start_link(Sup, Addr, Key, Vnode) ->
+   pipe:start_link(?MODULE, [Sup, Addr, Key, Vnode], []).
 
-init([Sup, Ns, Name, Vnode, Service]) ->
-   ?DEBUG("ambit [actor]: ~p init ~p ~p", [Vnode, Name, Service]),
+init([Sup, Addr, Key, Vnode]) ->
+   ?DEBUG("ambit [actor]: ~p init ~p", [Vnode, Key]),
    %% register actor management process to the pool
-   _ = pns:register(Ns, Name, self()),
-   erlang:send(self(), spawn),
+   _ = pns:register(Addr, Key, self()),
+   % erlang:send(self(), spawn),
    {ok, handle, 
       #{
          sup     => Sup, 
-         vnode   => Vnode, 
-         name    => Name, 
-         service => Service,
+         vnode   => Vnode,
+         entity  => #entity{key = Key},
          actor   => undefined,
          process => undefined
       }
@@ -53,12 +52,12 @@ free(_, #{sup := Sup, vnode := {_, Addr, _, _}}) ->
 
 %%
 %%
-ioctl(service, #{service := Service}) ->
-   % return actor service specification 
-   Service;
 ioctl(process, #{process := Process}) ->
    % return actor instance process 
    Process;
+ioctl(service, #{entity  := Service}) ->
+   % return entity definition
+   Service;
 ioctl(_, _) ->
    throw(not_implemented).
 
@@ -68,9 +67,15 @@ ioctl(_, _) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-%% return service specification
-service(Addr, Name) ->
-   pts:call(Addr, Name, service).
+%%
+%% return service / entity specification
+service(Addr, Key) ->
+   case pns:whereis(Addr, Key) of
+      undefined ->
+         undefined;
+      Pid       ->
+         pipe:ioctl(Pid, service)
+   end.
 
 %% handoff actor 
 handoff(Addr, Name, Vnode) ->
@@ -84,36 +89,53 @@ handoff(Addr, Name, Vnode) ->
 
 %%
 %%
-handle(spawn, _, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode, 
-                   name := Name, service := {Mod, Fun, Args}} = State) ->
-   {ok, Root} = ambit_actor_sup:start_child(Sup, {Mod, Fun, [Vnode | Args]}),
-	case erlang:function_exported(Mod, process, 1) of
-      true  ->
-			{ok, Pid} = Mod:process(Root),
-         %% register actor process to the pool
-			_ = pns:register(ambit, {Addr, Name}, Pid),
-         {next_state, handle, State#{actor := Root, process := Pid}};
-      false ->
-         %% register actor process to the pool
-			_ = pns:register(ambit, {Addr, Name}, Root),
-         {next_state, handle, State#{actor := Root, process := Root}}
+handle({create, #entity{key = _Key, vsn = VsnA}=Entity}, Pipe, #{entity := #entity{vsn = VsnB}}=State0) ->
+   case {uid:descend(VsnA, VsnB), uid:descend(VsnB, VsnA)} of
+      %% request is descend of actor -> create actor if not exists
+      {true,  _} ->
+         {Result, State1} = create(Entity, State0),
+         pipe:ack(Pipe, Result),
+         {next_state, handle, State1};
+
+      %% actor is descend of request -> skip create request
+      {_,  true} ->
+         pipe:ack(Pipe, {ok, Entity}),
+         {next_state, handle, State0};
+
+      %% conflict -> @todo: automatic conflict resolution 
+      _ ->
+         ?DEBUG("ambit [actor]: ~p create conflict with ~p", [_Key, uid:diff(VsnA, VsnB)]),
+         pipe:ack(Pipe, {error, conflict}),
+         {next_state, handle, State0}
    end;
 
-handle(free, _, #{vnode := {_, Addr, _, _}, name := Name}=State) ->
-   _ = pns:unregister(ambit, {Addr, Name}),
-   _ = pns:unregister(Addr, Name),
-   {stop, normal, State};
+handle({remove, #entity{key = _Key, vsn = VsnA}=Entity}, Pipe, #{entity := #entity{vsn = VsnB}}=State0) ->
+   case {uid:descend(VsnA, VsnB), uid:descend(VsnB, VsnA)} of
+      %% request is descend of actor -> remove actor if exists
+      {true,  _} ->
+         {Result, State1} = remove(Entity, State0),
+         pipe:ack(Pipe, Result),
+         {next_state, handle, State1};
 
-% @deprecated
-handle(service, Tx, #{service := Service}=State) ->
-   pipe:ack(Tx, Service),
+      %% actor is descend of request -> ignore request
+      {_,  true} ->
+         pipe:ack(Pipe, {ok, Entity}),
+         {next_state, handle, State0};
+
+      %% conflict -> @todo: automatic conflict resolution 
+      _ ->
+         ?DEBUG("ambit [actor]: ~p remove conflict with ~p", [_Key, uid:diff(VsnA, VsnB)]),
+         pipe:ack(Pipe, {error, conflict}),
+         {next_state, handle, State0}
+   end;
+
+
+handle({lookup, _Entity}, Pipe, #{entity := Entity}=State) ->
+   pipe:ack(Pipe, {ok, Entity}),
    {next_state, handle, State};
 
-% @deprecated
-handle(process, Tx, #{process := Process}=State) ->
-   pipe:ack(Tx, Process),
-   {next_state, handle, State};
-
+%%
+%% actor optional signaling
 handle({handoff, Vnode}, Tx, #{actor := Root, service := {Mod, _, _}}=State) ->
    case erlang:function_exported(Mod, handoff, 2) of
       true  ->
@@ -135,7 +157,48 @@ handle(_, _, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
+%%
+%%
+create(#entity{key = Key, val = {Mod, Fun, Arg}}=Entity0, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode} = State) ->
+   case ambit_actor_sup:init_service(Sup, {Mod, Fun, [Vnode | Arg]}) of
+      {ok, Root} ->
+         case erlang:function_exported(Mod, process, 1) of
+            true  ->
+               {ok, Pid} = Mod:process(Root),
+               %% register actor process to the pool
+               _ = pns:register(ambit, {Addr, Key}, Pid),
+               Entity1 = entity(Entity0, State),
+               {{ok, Entity1}, State#{actor => Root, process => Pid,  entity => Entity1}};
 
+            false ->
+               %% register actor process to the pool
+               _ = pns:register(ambit, {Addr, Key}, Root),
+               Entity1 = entity(Entity0, State),
+               {{ok, Entity1}, State#{actor => Root, process => Root, entity => Entity1}}
+         end;
+      {error, {already_started, _}} ->
+         Entity1 = entity(Entity0, State),
+         {{ok, Entity1}, State#{entity => Entity1}};
+      {error, _} = Error ->
+         {Error, State}
+   end.
+
+%%
+%%
+remove(#entity{key = Key} = Entity0, #{sup := Sup, vnode := {_, Addr, _, _}} = State) ->
+   _ = ambit_actor_sup:free_service(Sup),
+   _ = pns:unregister(ambit, {Addr, Key}),
+   % _ = pns:unregister(Addr, Key),
+   Entity1 = entity(Entity0#entity{val = undefined}, State),
+   % @todo: ttl timer 
+   {{ok, Entity1}, State#{entity => Entity1}}.
+
+%%
+%%
+entity(#entity{vsn = VsnA} = Entity0, #{entity := #entity{vsn = VsnB}}) ->
+   Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB)},
+   ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
+   Entity1.
 
 
 

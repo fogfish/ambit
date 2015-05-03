@@ -41,23 +41,43 @@ ioctl(_, _) ->
 
 %%
 %%
-handle({spawn, Name, Service}, Pipe, {_, Addr, _, _}=Vnode) ->
-   %% @todo: split ensure from spawn (2 - message)
-   pipe:a(Pipe, 
-      pts:ensure(Addr, Name, [Vnode, Service])
-   ),
-   {next_state, handle, Vnode};
+handle({create, #entity{key = Key}=Entity}, Pipe, {_, Addr, _, _}=Vnode) ->
+   case pts:ensure(Addr, Key, [Vnode]) of
+      {ok,  _} ->
+         pipe:a(Pipe, 
+            pts:call(Addr, Key, {create, Entity})
+         ),
+         {next_state, handle, Vnode};
+      {error, _} = Error ->
+         pipe:a(Pipe, Error),
+         {next_state, handle, Vnode}
+   end;
+   
+handle({remove, #entity{key = Key}=Entity}, Pipe, {_, Addr, _, _}=Vnode) ->
+   case pts:call(Addr, Key, {remove, Entity}) of
+      %% not found is not a critical error, ping back entity
+      {error, not_found} ->
+         pipe:a(Pipe, {ok, Entity}),
+         {next_state, handle, Vnode};
+      Result ->
+         pipe:a(Pipe, Result),
+         {next_state, handle, Vnode}
+   end;
 
-%%
-handle({free, Name}, Pipe, {_, Addr, _, _}=Vnode) ->
-   pts:send(Addr, Name, free),
-   pipe:a(Pipe, ok),
-   {next_state, handle, Vnode};
+handle({lookup, #entity{key = Key}=Entity}, Pipe, {_, Addr, _, _}=Vnode) ->
+   case pts:call(Addr, Key, {lookup, Entity}) of
+      %% not found is not a critical error, ping back entity
+      {error, not_found} ->
+         pipe:a(Pipe, {ok, Entity}),
+         {next_state, handle, Vnode};
+      Result ->
+         pipe:a(Pipe, Result),
+         {next_state, handle, Vnode}
+   end;
 
-%%
-handle({whereis, Name}, Pipe, {_, Addr, _, _}=Vnode) ->
+handle({whereis, #entity{key = Key}}, Pipe, {_, Addr, _, _}=Vnode) ->
    pipe:a(Pipe, 
-      pns:whereis(ambit, {Addr, Name})
+      pns:whereis(ambit, {Addr, Key})
    ),
    {next_state, handle, Vnode};
 

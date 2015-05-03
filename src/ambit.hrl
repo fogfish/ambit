@@ -17,8 +17,7 @@
 %%
 %% heap of vnode processes
 -define(HEAP_VNODE, [
-   'read-through'
-  ,{keylen,      inf}
+   {keylen,      inf}
   ,{supervisor,  ambit_vnode_sup}
   ,{factory,     transient}
 ]).
@@ -26,8 +25,7 @@
 %%
 %% heap of actor processes
 -define(HEAP_ACTOR, [
-   'read-through'
-  ,{keylen,      inf}
+   {keylen,      inf}
   ,{supervisor,  ambit_actor_sup}
   ,{factory,     temporary}
 ]).
@@ -56,6 +54,14 @@
 -ifndef(CONFIG_AAE_CAPACITY).
 -define(CONFIG_AAE_CAPACITY,  5).
 -endif.
+
+%%
+%% ambit entity
+-record(entity, {
+   key  = undefined :: binary(),
+   val  = undefined :: any(),
+   vsn  = []        :: uid:vclock()
+}).
 
 
 %% 

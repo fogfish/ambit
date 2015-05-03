@@ -108,10 +108,24 @@ suspend(transfer, _, #{vnode := _Vnode, stream := {}}=State) ->
 
 suspend(transfer, _, #{vnode := {_, Addr, _, _}, handoff := Handoff, stream := Stream}=State) ->
    {Name, _Pid} = stream:head(Stream),
-   Service      = ambit_actor:service(Addr, Name),
-   Tx = ambit_peer:cast(Handoff, {spawn, Name, Service}),
-   ?DEBUG("ambit [vnode]: transfer ~p", [Name]),
-   {next_state, transfer, State#{tx => Tx}, 10000}; %% @todo: config
+   case ambit_actor:service(Addr, Name) of
+      %% service died during transfer i/o
+      undefined ->
+         erlang:send(self(), transfer),
+         {next_state, suspend, State#{stream => stream:tail(Stream)}};      
+
+      %% sync removed service
+      #entity{val = undefined} = Entity ->
+         ?DEBUG("ambit [vnode]: transfer (-) ~p", [Name]),
+         Tx = ambit_peer:cast(Handoff, {remove, Entity}),
+         {next_state, transfer, State#{tx => Tx}, 10000}; %% @todo: config
+
+      %% sync existed service
+      Entity ->
+         ?DEBUG("ambit [vnode]: transfer (+) ~p", [Name]),
+         Tx = ambit_peer:cast(Handoff, {create, Entity}),
+         {next_state, transfer, State#{tx => Tx}, 10000}  %% @todo: config
+   end;
 
 suspend(_, _, State) ->
    {next_state, suspend, State}.

@@ -172,7 +172,7 @@ ensure(_Node, {_, Addr, Peer, Pid}) ->
 %%
 %% lookup service hand of given Vnode
 lookup({Hand,  Addr, _, _}) ->
-   pns:whereis(vnode, {Hand, Addr}).
+   pns:whereis(vnode_sys, {Hand, Addr}).
 
 %%
 %% dispatch cluster event to destination vnode process 

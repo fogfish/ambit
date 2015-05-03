@@ -24,11 +24,11 @@ start_link(Vnode) ->
 
 init([{Type, Addr, _, _}=Vnode]) ->
    ?DEBUG("ambit [spawn]: init ~p", [Vnode]),
-   ok = pns:register(vnode, {Type, Addr}, self()),
+   ok = pns:register(vnode_sys, {Type, Addr}, self()),
    {ok, handle, Vnode}.
 
-free(_, _Vnode) ->
-   ok.
+free(_, {Type, Addr, _, _}) ->
+   pns:unregister(vnode_sys, {Type, Addr}).
 
 ioctl(_, _) ->
    throw(not_implemented).
@@ -42,6 +42,7 @@ ioctl(_, _) ->
 %%
 %%
 handle({spawn, Name, Service}, Pipe, {_, Addr, _, _}=Vnode) ->
+   %% @todo: split ensure from spawn (2 - message)
    pipe:a(Pipe, 
       pts:ensure(Addr, Name, [Vnode, Service])
    ),

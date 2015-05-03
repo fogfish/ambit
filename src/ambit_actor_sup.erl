@@ -1,5 +1,7 @@
 %% @description
-%%   supervisor for actor process
+%%   Supervisor for actor process(es). It manages both actual actor and controlling processes.
+%%   The supervisor is required to spawn "arbitrary" client process and integrate it to common
+%%   name space. The global actor factory do not work due to actor specific "service" definition  
 -module(ambit_actor_sup).
 -behaviour(supervisor).
 

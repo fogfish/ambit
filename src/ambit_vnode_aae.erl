@@ -21,7 +21,7 @@
 -spec(new/1 :: (list()) -> {ek:vnode(), ek:vnode()}).
 
 new([{_, Addr, Key, Peer}=Vnode]) ->
-   ok = pns:register(vnode, {ae, Addr}, self()), 
+   ok = pns:register(vnode_sys, {aae, Addr}, self()), 
    {{ae, Addr, Key, Peer}, Vnode}.
 
 %%

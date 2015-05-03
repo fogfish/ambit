@@ -3,7 +3,8 @@
 -module(ambit).
 -include("ambit.hrl").
 
-%% @todo: write-repair (if handoff node do not exist during write)
+%% @todo: 
+%%   * write-repair (if handoff node do not exist during write)
 
 -export([behaviour_info/1]).
 -export([
@@ -52,6 +53,14 @@ behaviour_info(_) ->
 %%% application interface
 %%%
 %%%----------------------------------------------------------------------------   
+
+%%
+%% create service context
+% new(Key) ->
+%    ok.
+
+% new(Key, Service) ->
+%    ok.
 
 %%
 %% spawn service on the cluster

@@ -33,15 +33,17 @@ init([Addr, Vnode]) ->
             ?CHILD(worker, ambit_vnode, [self(), Vnode])
 
             %% require before anything
+            %% actor management table
            ,?CHILD(supervisor, pts, [Addr, ?HEAP_ACTOR])
            
+            %% spawn service
            ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
+
             %% @todo: make gossip configurable (enable/disable + timeouts)
             %% @todo: disable gossip (repair for hand-off)
            ,?CHILD(worker, aae,  [[
                {session,  opts:val(aae, ?CONFIG_AAE_TIMEOUT, ambit)}
               ,{timeout,  ?CONFIG_TIMEOUT_REQ}
-              ,{capacity, opts:val(aae_capacity, ?CONFIG_AAE_CAPACITY, ambit)}
               ,{strategy, aae}
               ,{adapter,  {ambit_vnode_aae, [Vnode]}}
             ]])

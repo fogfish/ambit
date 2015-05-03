@@ -80,6 +80,7 @@ primary({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
 
 primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
    ?NOTICE("ambit [vnode]: sync ~p with ~p", [Vnode, Peer]),
+   %% @todo: initiate actor sync procedure 
    {next_state, primary, State}.
 
 %%
@@ -127,7 +128,11 @@ transfer({Tx, _Result}, _, #{tx := Tx, vnode := {_, Addr, _, _}, handoff := Hand
    
 transfer(timeout, _, State) ->
    erlang:send_after(1000, self(), transfer),
-   {next_state, suspend, State}.
+   {next_state, suspend,  State};
+
+transfer(_, _, State) ->
+   {next_state, transfer, State}.
+
    
 %%%----------------------------------------------------------------------------   
 %%%

@@ -58,6 +58,7 @@
 %%
 %% ambit entity
 -record(entity, {
+   %% @todo: address or name so that addr is used for vnode lookup, key as instance naming
    key  = undefined :: binary(),
    val  = undefined :: any(),
    vsn  = []        :: uid:vclock()

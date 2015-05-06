@@ -4,6 +4,7 @@
 %% @todo
 %%   * actor signaling
 %%   * actor tth -> hibernate for memory management
+%%   * actor auto conflict resolution
 -module(ambit_actor).
 -behaviour(pipe).
 

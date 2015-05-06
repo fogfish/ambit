@@ -23,7 +23,6 @@
    whereis/1,
    whereis/2
 ]).
-
 -export([
    successors/1,
    predecessors/1,
@@ -67,7 +66,7 @@ behaviour_info(_) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% create actor casual context
+%% create casual context for actor entity
 -spec(actor/1 :: (binary()) -> entity()).
 -spec(actor/2 :: (binary(), any()) -> entity()).
 
@@ -128,7 +127,7 @@ lookup(Key) ->
    ambit:lookup(Key, []).
 
 lookup(Key, Opts)
- when is_binary(Key) ->
+ when is_binary(Key) orelse is_integer(Key) ->
    {ok, Ent} = actor(Key),
    ambit_coordinator:lookup(Ent, Opts);
 lookup(#entity{} = Ent, Opts) ->
@@ -145,7 +144,7 @@ whereis(Key) ->
 	whereis(Key, []).
 
 whereis(Key, Opts)
- when is_binary(Key) ->
+ when is_binary(Key) orelse is_integer(Key) ->
    {ok, Ent} = actor(Key, []), 
    ambit_coordinator:whereis(Ent, Opts);
 whereis(#entity{key = Key}, Opts) ->
@@ -194,6 +193,8 @@ sibling(Fun, Key) ->
 %%  Options
 %%    * alive - vnode availability
 %%    * alloc - vnode allocation
+%% @todo:
+%%    vnode capacity
 i(alive) ->
 	[{X, length(Y)} || X <- ek:address(ambit), Y <- [i(X)], length(Y) =/= 0];
 

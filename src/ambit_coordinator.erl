@@ -178,7 +178,7 @@ release(#{uow := UoW, pipe := Pipe}=Req) ->
 unit(#{req := whereis, n := N, entity := #entity{val = Val}})
  when N =< 0 ->
    clue:inc({ambit, req, success}),
-   Val;
+   lists:reverse(Val);
 
 unit(#{req := whereis, n := N})
  when N > 0 ->
@@ -188,7 +188,7 @@ unit(#{req := whereis, n := N})
 unit(#{n := N, entity := Entity})
  when N =< 0 ->
    clue:inc({ambit, req, success}),
-   Entity;
+   {ok, Entity};
 
 unit(#{n := N, error := []})
  when N > 0  ->

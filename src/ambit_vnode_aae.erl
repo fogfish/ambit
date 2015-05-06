@@ -22,14 +22,14 @@
 
 new([{_, Addr, Key, Peer}=Vnode]) ->
    ok = pns:register(vnode_sys, {aae, Addr}, self()), 
-   {{ae, Addr, Key, Peer}, Vnode}.
+   {{ae, Addr, Key, Peer}, Vnode}. 
 
 %%
 %% return list of candidate peers (potential successors)
 -spec(peers/1 :: (ek:vnode()) -> {[ek:vnode()], ek:vnode()}).
 
 peers({_, Self, _, _}=State) ->
-   List = [{ae, Addr, Node, Peer} || 
+   List = [{aae, Addr, Node, Peer} ||
          {primary, Addr, Node, Peer} <- ek:successors(ambit, Self),
          erlang:node(Peer) =/= erlang:node()],
    {List, State}.      
@@ -63,13 +63,32 @@ snapshot({_, Addr, _, _}=State) ->
 -spec(diff/3 :: (ek:vnode(), binary(), ek:vnode()) -> ok).
 
 diff(Peer, Name, {_, Addr, _, _}) ->
-   Service = ambit_actor:service(Addr, Name),
-   Vnode   = erlang:setelement(1, Peer, primary),
-   Tx = ambit_peer:cast(Vnode, {spawn, Name, Service}),
-   receive
-      {Tx, _} ->
-         ok
-   after ?CONFIG_TIMEOUT_REQ ->
-         ok
+   Handoff = erlang:setelement(1, Peer, primary),
+   case ambit_actor:service(Addr, Name) of
+      %% service died during aae session
+      undefined ->
+         ok;      
+
+      %% sync removed service
+      #entity{val = undefined} = Entity ->
+         ?DEBUG("ambit [aae]: (-) ~p", [Name]),
+         Tx = ambit_peer:cast(Handoff, {remove, Entity}),
+         receive
+            {Tx, _} ->
+               ok
+         after ?CONFIG_TIMEOUT_REQ ->
+               ok
+         end;
+
+      %% sync existed service
+      Entity ->
+         ?DEBUG("ambit [aae]: (+) ~p", [Name]),
+         Tx = ambit_peer:cast(Handoff, {create, Entity}),
+         receive
+            {Tx, _} ->
+               ok
+         after ?CONFIG_TIMEOUT_REQ ->
+               ok
+         end
    end.
 

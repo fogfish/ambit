@@ -3,8 +3,7 @@
 %%
 %% @todo
 %%   * actor signaling
-%%   * actor ttl
-%%   * free actor process but keep empty stub for management and synchronization 
+%%   * actor tth -> hibernate for memory management
 -module(ambit_actor).
 -behaviour(pipe).
 
@@ -35,7 +34,6 @@ init([Sup, Addr, Key, Vnode]) ->
    ?DEBUG("ambit [actor]: ~p init ~p", [Vnode, Key]),
    %% register actor management process to the pool
    _ = pns:register(Addr, Key, self()),
-   % erlang:send(self(), spawn),
    {ok, handle, 
       #{
          sup     => Sup, 
@@ -46,7 +44,8 @@ init([Sup, Addr, Key, Vnode]) ->
       }
    }.
 
-free(_, #{sup := Sup, vnode := {_, Addr, _, _}}) ->
+free(_, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode, entity := #entity{key = Key}}) ->
+   ?DEBUG("ambit [actor]: ~p free ~p", [Vnode, Key]),
    supervisor:terminate_child(pts:i(factory, Addr), Sup),
    ok.
 
@@ -95,6 +94,7 @@ handle({create, #entity{key = _Key, vsn = VsnA}=Entity}, Pipe, #{entity := #enti
       {true,  _} ->
          {Result, State1} = create(Entity, State0),
          pipe:ack(Pipe, Result),
+         tempus:timer(opts:val(ttl, undefined, ambit), ttl),
          {next_state, handle, State1};
 
       %% actor is descend of request -> skip create request
@@ -115,7 +115,12 @@ handle({remove, #entity{key = _Key, vsn = VsnA}=Entity}, Pipe, #{entity := #enti
       {true,  _} ->
          {Result, State1} = remove(Entity, State0),
          pipe:ack(Pipe, Result),
-         {next_state, handle, State1};
+         case tempus:timer(opts:val(ttd, undefined, ambit), ttd) of
+            undefined ->
+               {stop, normal, State1};
+            _         ->
+               {next_state, handle, State1}
+         end;
 
       %% actor is descend of request -> ignore request
       {_,  true} ->
@@ -136,7 +141,7 @@ handle({lookup, _Entity}, Pipe, #{entity := Entity}=State) ->
 
 %%
 %% actor optional signaling
-handle({handoff, Vnode}, Tx, #{actor := Root, service := {Mod, _, _}}=State) ->
+handle({handoff, Vnode}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}}}=State) ->
    case erlang:function_exported(Mod, handoff, 2) of
       true  ->
          pipe:ack(Tx, 
@@ -147,6 +152,12 @@ handle({handoff, Vnode}, Tx, #{actor := Root, service := {Mod, _, _}}=State) ->
          pipe:ack(Tx, ok),
          {next_state, handle, State}
    end;
+
+handle(ttl, Tx, #{entity := #entity{vsn = Vsn}=Entity}=State) ->
+   handle({remove, Entity#entity{vsn = uid:vclock(Vsn)}}, Tx, State);
+
+handle(ttd,  _, #{entity := #entity{val = undefined}}=State) ->
+   {stop, normal, State};   
 
 handle(_, _, State) ->
    {next_state, handle, State}.

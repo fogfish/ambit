@@ -136,6 +136,7 @@ transfer({Tx, _Result}, _, #{tx := Tx, vnode := {_, Addr, _, _}, handoff := Hand
    ?DEBUG("ambit [vnode]: transfer ~p", [_Result]),
    {Name, _Pid} = stream:head(Stream),
    %% @todo: make asynchronous handoff with long-term expectation of data transfer
+   %%        handoff is only "create feature"
    ambit_actor:handoff(Addr, Name, Handoff),
    erlang:send(self(), transfer),
    {next_state, suspend, State#{stream => stream:tail(Stream)}};
@@ -153,6 +154,10 @@ transfer(_, _, State) ->
 %%% private
 %%%
 %%%----------------------------------------------------------------------------   
+
+
+
+
 
 
 

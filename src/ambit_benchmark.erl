@@ -51,7 +51,7 @@ run(_, _KeyGen, _ValGen, State) ->
 
 %%%----------------------------------------------------------------------------   
 %%%
-%%% stress
+%%% stress test
 %%%
 %%%----------------------------------------------------------------------------   
 
@@ -91,7 +91,9 @@ fold([Pid | Pids]) ->
 loop(Pid, _Id, 0) ->
    Pid ! {ok, self()};
 loop(Pid,  Id, N) ->
-   ambit:spawn(<<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>, {ambit_echo, start_link, []}),
+   Key     = <<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>,
+   {ok, A} = ambit:actor(Key, ?SERVICE),
+   {ok, _} = ambit:spawn(A),
    loop(Pid, Id, N - 1).
 
 

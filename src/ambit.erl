@@ -8,9 +8,10 @@
 
 -export([behaviour_info/1]).
 -export([
-   new/1,
-   new/2,
-   get/1
+   actor/1,
+   actor/2,
+   get/1,
+   set/2
 ]).
 -export([
    spawn/1,
@@ -66,22 +67,29 @@ behaviour_info(_) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% create service entity
--spec(new/1 :: (binary()) -> entity()).
--spec(new/2 :: (binary(), any()) -> entity()).
+%% create actor casual context
+-spec(actor/1 :: (binary()) -> entity()).
+-spec(actor/2 :: (binary(), any()) -> entity()).
 
-new(Key) ->
-   #entity{key = Key}.
+actor(Key) ->
+   {ok, #entity{key = Key}}.
 
-new(Key, Service) ->
-   #entity{key = Key, val = Service}.
+actor(Key, Service) ->
+   {ok, #entity{key = Key, val = Service}}.
 
 %%
-%% get service entity property
+%% get casual context property
 -spec(get/1 :: (entity()) -> any() | undefined).
 
 get(#entity{val = Service}) ->
    Service.
+
+%%
+%% get casual context property
+-spec(set/2 :: (entity(), any()) -> entity()).
+
+set(#entity{} = Ent, Service) ->
+   Ent#entity{val = Service}.
 
 %%
 %% spawn service on the cluster
@@ -113,27 +121,36 @@ free(Entity, Opts) ->
 %% lookup service on the cluster
 %%  Options
 %%    r - number of succeeded reads
--spec(lookup/1 :: (key()) -> {ok, entity()} | {error, any()}).
--spec(lookup/2 :: (key(), any()) -> {ok, entity()} | {error, any()}).
+-spec(lookup/1 :: (key() | entity()) -> {ok, entity()} | {error, any()}).
+-spec(lookup/2 :: (key() | entity(), any()) -> {ok, entity()} | {error, any()}).
 
 lookup(Key) ->
    ambit:lookup(Key, []).
 
-lookup(Key, Opts) ->
-   ambit_coordinator:lookup(new(Key), Opts).
-
+lookup(Key, Opts)
+ when is_binary(Key) ->
+   {ok, Ent} = actor(Key),
+   ambit_coordinator:lookup(Ent, Opts);
+lookup(#entity{} = Ent, Opts) ->
+   ambit_coordinator:lookup(Ent, Opts).
+ 
 %%
 %% lookup service processes
 %%  Options
 %%    r - number of succeeded reads
--spec(whereis/1 :: (any()) -> [pid()]).
--spec(whereis/2 :: (any(), list()) -> [pid()]).
+-spec(whereis/1 :: (key() | entity()) -> [pid()]).
+-spec(whereis/2 :: (key() | entity(), list()) -> [pid()]).
 
 whereis(Key) ->
 	whereis(Key, []).
 
-whereis(Key, Opts) ->
-   ambit_coordinator:whereis(#entity{key = Key, val = []}, Opts).
+whereis(Key, Opts)
+ when is_binary(Key) ->
+   {ok, Ent} = actor(Key, []), 
+   ambit_coordinator:whereis(Ent, Opts);
+whereis(#entity{key = Key}, Opts) ->
+   {ok, Ent} = actor(Key, []), 
+   ambit_coordinator:whereis(Ent, Opts).
 
 %%
 %% return list of successor nodes in ambit cluster
@@ -178,13 +195,13 @@ sibling(Fun, Key) ->
 %%    * alive - vnode availability
 %%    * alloc - vnode allocation
 i(alive) ->
-	[{X, length(Y)} || X <- ek:vnode(ambit), Y <- [i(X)], length(Y) =/= 0];
+	[{X, length(Y)} || X <- ek:address(ambit), Y <- [i(X)], length(Y) =/= 0];
 
 i(alloc) ->
 	lists:foldl(
 		fun(X, Acc) -> orddict:update_counter(X, 1, Acc) end,
 		orddict:new(),
-		[Y || X <- ek:vnode(ambit), {_, _, Y, _} <- i(X)]
+		[Y || X <- ek:address(ambit), {_, _, Y, _} <- i(X)]
 	);
 
 i(Addr) ->

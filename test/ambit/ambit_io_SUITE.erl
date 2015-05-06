@@ -82,8 +82,9 @@ end_per_group(_, _Config) ->
 spawn(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   ok  = ambit:spawn(Key, {ambit_echo, start_link, []}, [{w, N}]),
-   Pid = ambit:whereis(Key, [{r, N}]),
+   {ok, Rq0} = ambit:actor(Key, {ambit_echo, start_link, []}),
+   {ok, Rq1} = ambit:spawn(Rq0, [{w, N}]),
+   Pid = ambit:whereis(Rq1, [{r, N}]),
    case length(Pid) of
       X when X >= N ->
          ok;
@@ -98,11 +99,12 @@ spawn(Config) ->
 free(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   ok  = ambit:spawn(Key, {ambit_echo, start_link, []}),
-   ok  = ambit:free(Key),
+   {ok, Rq0} = ambit:actor(Key, {ambit_echo, start_link, []}),
+   {ok, Rq1} = ambit:spawn(Rq0),
+   {ok, Rq2} = ambit:free(Rq1),
    %% free is not committed by each sibling peer due to eventual consistency.
    %% operation is succeeded when N sibling is committed 
-   case ambit:whereis(Key) of
+   case ambit:whereis(Rq2) of
       List when length(List) =< 3 - N ->
          ok;
       _ ->
@@ -111,10 +113,11 @@ free(Config) ->
 
 %%
 %%
-ping(Config) -> 
+ping(_Config) -> 
    Key  = key(),
-   ok   = ambit:spawn(Key, {ambit_echo, start_link, []}),
-   Ping = [pipe:call(Pid, ping) || Pid <- ambit:whereis(Key)],
+   {ok, Rq0} = ambit:actor(Key, {ambit_echo, start_link, []}),
+   {ok, Rq1} = ambit:spawn(Rq0),
+   Ping = [pipe:call(Pid, ping) || Pid <- ambit:whereis(Rq1)],
    case length(Ping) of
       X when X > 0 ->
          ok;
@@ -145,6 +148,7 @@ cluster_pending_peers(N) ->
 key() ->
    random:seed(erlang:now()),
    scalar:s(random:uniform(1 bsl 32)).
+   % scalar:s(random:uniform(1 bsl 4)).
 
 
 

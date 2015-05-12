@@ -26,7 +26,6 @@
 -export([
    successors/1,
    predecessors/1,
-   sibling/2,
    i/1,
    start/0
 ]).
@@ -156,31 +155,15 @@ whereis(#entity{key = Key}, Opts) ->
 -spec(successors/1 :: (any()) -> [ek:vnode()]).
 
 successors(Key) ->
-   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- sibling(fun ek:successors/2, Key)].
+   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- ek:successors(ambit, Key)].
 
 %%
 %% return list of successor nodes in ambit cluster
 -spec(predecessors/1 :: (any()) -> [ek:vnode()]).
 
 predecessors(Key) ->
-   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- sibling(fun ek:predecessors/2, Key)].
+   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- ek:predecessors(ambit, Key)].
 
-%%
-%% return list of sibling nodes
--spec(sibling/2 :: (function(), any()) -> [ek:vnode()]).
-
-sibling(Fun, Key) ->
-   case
-      lists:partition(
-         fun({X, _, _, _}) -> X =/= primary end,
-         Fun(ambit, Key)
-      )
-   of
-      {Handoff,      []} ->
-         Handoff;
-      {Handoff, Primary} ->
-         Primary ++ Handoff
-   end.
 
 %%%----------------------------------------------------------------------------   
 %%%

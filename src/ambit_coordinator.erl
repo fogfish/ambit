@@ -47,17 +47,16 @@ ioctl(_, _) ->
 %%
 %%
 create(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
-   call(ambit:sibling(fun ek:successors/2, Key), create, Entity#entity{vsn = uid:vclock(Vsn)}, Opts).
+   call(ek:successors(ambit, Key), create, Entity#entity{vsn = uid:vclock(Vsn)}, Opts).
 
 remove(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
-   call(ambit:sibling(fun ek:successors/2, Key), remove, Entity#entity{vsn = uid:vclock(Vsn)}, Opts).
+   call(ek:successors(ambit, Key), remove, Entity#entity{vsn = uid:vclock(Vsn)}, Opts).
 
 lookup(#entity{key = Key}=Entity, Opts) ->
-   call(ambit:sibling(fun ek:successors/2, Key), lookup, Entity, Opts).
+   call(ek:successors(ambit, Key), lookup, Entity, Opts).
 
 whereis(#entity{key = Key}=Entity, Opts) ->
-   call(ambit:sibling(fun ek:successors/2, Key), whereis, Entity, Opts).
-   
+   call(ek:successors(ambit, Key), whereis, Entity, Opts).
 
 %%
 %%
@@ -85,7 +84,7 @@ call([], _Req, _Entity, _Opts) ->
 %%
 idle({req, UoW, Req, #entity{key = Key}=Entity, Opts}, Pipe, _State) ->
    ?NOTICE("coordinate ~p for ~p", [Req, Entity]),
-   Peers = ambit:sibling(fun ek:successors/2, Key),
+   Peers = ek:successors(ambit, Key),
    case 
       opts:val(r, opts:val(w, ?CONFIG_N, Opts), Opts)
    of

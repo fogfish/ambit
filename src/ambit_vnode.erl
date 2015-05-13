@@ -78,10 +78,19 @@ primary({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
       }
    };
 
-primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
+primary({sync, Peer}, _, #{vnode := {_, Addr, _, _} = Vnode}=State) ->
    ?NOTICE("ambit [vnode]: sync ~p with ~p", [Vnode, Peer]),
-   %% @todo: initiate actor sync procedure 
+   %% @todo: actor sync procedure in async manner 
+   lists:foreach(
+      fun({Name, _Pid}) ->
+         %% @todo: make asynchronous handoff with long-term expectation of data transfer
+         %%        handoff is only "create feature"
+         ambit_actor:sync(Addr, Name, Peer)
+      end,
+      pns:lookup(Addr, '_')
+   ),
    {next_state, primary, State}.
+
 
 %%
 %%

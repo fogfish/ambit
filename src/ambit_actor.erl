@@ -19,6 +19,7 @@
    %% api
   ,service/2
   ,handoff/3
+  ,sync/3
 ]).
 
 
@@ -80,6 +81,11 @@ service(Addr, Key) ->
 %% handoff actor 
 handoff(Addr, Name, Vnode) ->
    pts:call(Addr, Name, {handoff, Vnode}).
+
+%% sync actor
+sync(Addr, Name, Peer) ->
+   pts:call(Addr, Name, {sync, Peer}).
+
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -153,6 +159,19 @@ handle({handoff, Vnode}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}
          pipe:ack(Tx, ok),
          {next_state, handle, State}
    end;
+
+handle({sync, Peer}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}}}=State) ->
+   case erlang:function_exported(Mod, sync, 2) of
+      true  ->
+         pipe:ack(Tx, 
+            Mod:sync(Root, Peer)
+         ),
+         {next_state, handle, State};
+      false ->
+         pipe:ack(Tx, ok),
+         {next_state, handle, State}
+   end;
+
 
 handle(ttl, Tx, #{entity := #entity{vsn = Vsn}=Entity}=State) ->
    handle({remove, Entity#entity{vsn = uid:vclock(Vsn)}}, Tx, State);

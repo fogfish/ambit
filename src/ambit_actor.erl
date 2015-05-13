@@ -80,11 +80,11 @@ service(Addr, Key) ->
 
 %% handoff actor 
 handoff(Addr, Name, Vnode) ->
-   pts:call(Addr, Name, {handoff, Vnode}).
+   pts:call(Addr, Name, {handoff, Vnode}, infinity).
 
 %% sync actor
 sync(Addr, Name, Peer) ->
-   pts:call(Addr, Name, {sync, Peer}).
+   pts:call(Addr, Name, {sync, Peer}, infinity).
 
 
 %%%----------------------------------------------------------------------------   

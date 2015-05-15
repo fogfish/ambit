@@ -151,8 +151,7 @@ whereis(Key, Opts)
  when is_binary(Key) orelse is_integer(Key) ->
    ambit_req_whereis:call(actor(Key, []), Opts);
 whereis(#entity{key = Key}, Opts) ->
-   {ok, Ent} = actor(Key, []), 
-   ambit_req_whereis:call(Ent, Opts).
+   ambit_req_whereis:call(actor(Key, []), Opts).
 
 %%
 %% return list of successor nodes in ambit cluster

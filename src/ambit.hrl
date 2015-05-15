@@ -12,6 +12,8 @@
 
 %%
 %% default R/W parameters
+-define(CONFIG_W,      1).
+-define(CONFIG_R,      1).
 -define(CONFIG_N,      1).
 
 %%

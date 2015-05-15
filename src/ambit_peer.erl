@@ -12,7 +12,7 @@
   ,ioctl/2
   ,handle/3
    %% interface
-  ,coordinator/1
+  ,coordinator/2
   ,i/1
   ,cast/2
   ,send/2
@@ -54,10 +54,11 @@ ioctl(_, _) ->
 
 %%
 %% lease transaction coordinator 
--spec(coordinator/1 :: (ek:vnode()) -> any()).
+-spec(coordinator/2 :: (ek:vnode(), atom()) -> any()).
 
-coordinator({_, _, _, Pid}) ->
-   pipe:call(Pid, coordinator, infinity).
+coordinator({_, _, _, Pid}, Pool) ->
+   pipe:call(Pid, {coordinator, Pool}, infinity).
+
 
 %%
 %% get vnode status 
@@ -90,9 +91,9 @@ send({_, _, _, Pid} = Vnode, Msg) ->
 
 %%
 %%
-handle(coordinator, Pipe, State) ->
+handle({coordinator, Pool}, Pipe, State) ->
    pipe:ack(Pipe,
-      pq:lease(ambit_coordinator, [{tenant, pipe:a(Pipe)}])
+      pq:lease(Pool, [{tenant, pipe:a(Pipe)}])
    ),
    {next_state, handle, State};
 

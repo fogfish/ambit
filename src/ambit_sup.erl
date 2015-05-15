@@ -12,11 +12,11 @@
 -define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, permanent, 5000, Type, dynamic}).
 -define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, permanent, 5000, Type, dynamic}).
 
--define(POOL, [
-   {type,     reusable}     
-  ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, thing)}    
-  ,{worker,   ambit_coordinator}    
-]).
+% -define(POOL(X), [
+%    {type,     reusable}     
+%   ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, ambit)}    
+%   ,{worker,   X}    
+% ]).
 
 %%-----------------------------------------------------------------------------
 %%
@@ -33,9 +33,12 @@ init([]) ->
          {one_for_one, 4, 1800},
          [
  				%%
-				%% transaction coordinator pool 
-				?CHILD(worker, pq, [ambit_coordinator, ?POOL])
-            
+				%% transaction pool(s) 
+			   ?CHILD(worker, ambit_req_create)
+           ,?CHILD(worker, ambit_req_remove)
+           ,?CHILD(worker, ambit_req_lookup)
+           ,?CHILD(worker, ambit_req_whereis)
+
             %%
             %% vnode management pool
            ,?CHILD(supervisor, vnode, pts, [vnode, ?HEAP_VNODE])

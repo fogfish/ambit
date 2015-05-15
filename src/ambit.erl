@@ -54,6 +54,12 @@ behaviour_info(callbacks) ->
       %%
       %% -spec(handoff/2 :: (pid(), ek:vnode()) -> ok).
      ,{handoff,   2}
+
+      %%
+      %% initiate actor repair procedure
+      %%
+      %% -spec(sync/2 :: (pid(), ek:vnode()) -> ok).
+     ,{sync,      2}
 	];
 behaviour_info(_) ->
    undefined.
@@ -70,10 +76,10 @@ behaviour_info(_) ->
 -spec(actor/2 :: (binary(), any()) -> entity()).
 
 actor(Key) ->
-   {ok, #entity{key = Key}}.
+   #entity{key = Key}.
 
 actor(Key, Service) ->
-   {ok, #entity{key = Key, val = Service}}.
+   #entity{key = Key, val = Service}.
 
 %%
 %% get casual context property
@@ -93,62 +99,60 @@ set(#entity{} = Ent, Service) ->
 %% spawn service on the cluster
 %%  Options
 %%    w - number of succeeded writes
--spec(spawn/1 :: (entity()) -> {ok, entity()} | {error, any()}).
--spec(spawn/2 :: (entity(), list()) -> {ok, entity()} | {error, any()}).
+-spec(spawn/1 :: (entity()) -> entity() | {error, any()}).
+-spec(spawn/2 :: (entity(), list()) -> entity() | {error, any()}).
 
 spawn(Entity) ->
    ambit:spawn(Entity, []).
 
 spawn(Entity, Opts) ->
-   ambit_coordinator:create(Entity, Opts).
+   ambit_req_create:call(Entity, Opts).
    
 %%
 %% free service on the cluster
 %%  Options
 %%    w - number of succeeded writes
--spec(free/1 :: (entity()) -> {ok, entity()} | {error, any()}).
--spec(free/2 :: (entity(), list()) -> {ok, entity()} | {error, any()}).
+-spec(free/1 :: (entity()) -> entity() | {error, any()}).
+-spec(free/2 :: (entity(), list()) -> entity() | {error, any()}).
 
 free(Entity) ->
 	free(Entity, []).
 
 free(Entity, Opts) ->
-   ambit_coordinator:remove(Entity, Opts).
+   ambit_req_remove:call(Entity, Opts).
 
 %%
 %% lookup service on the cluster
 %%  Options
 %%    r - number of succeeded reads
--spec(lookup/1 :: (key() | entity()) -> {ok, entity()} | {error, any()}).
--spec(lookup/2 :: (key() | entity(), any()) -> {ok, entity()} | {error, any()}).
+-spec(lookup/1 :: (key() | entity()) -> entity() | {error, any()}).
+-spec(lookup/2 :: (key() | entity(), any()) -> entity() | {error, any()}).
 
 lookup(Key) ->
    ambit:lookup(Key, []).
 
 lookup(Key, Opts)
  when is_binary(Key) orelse is_integer(Key) ->
-   {ok, Ent} = actor(Key),
-   ambit_coordinator:lookup(Ent, Opts);
+   ambit_req_lookup:call(actor(Key), Opts);
 lookup(#entity{} = Ent, Opts) ->
-   ambit_coordinator:lookup(Ent, Opts).
+   ambit_req_lookup:call(Ent, Opts).
  
 %%
 %% lookup service processes
 %%  Options
 %%    r - number of succeeded reads
--spec(whereis/1 :: (key() | entity()) -> [pid()]).
--spec(whereis/2 :: (key() | entity(), list()) -> [pid()]).
+-spec(whereis/1 :: (key() | entity()) -> [pid()] | {error, any()}).
+-spec(whereis/2 :: (key() | entity(), list()) -> [pid()] | {error, any()}).
 
 whereis(Key) ->
 	whereis(Key, []).
 
 whereis(Key, Opts)
  when is_binary(Key) orelse is_integer(Key) ->
-   {ok, Ent} = actor(Key, []), 
-   ambit_coordinator:whereis(Ent, Opts);
+   ambit_req_whereis:call(actor(Key, []), Opts);
 whereis(#entity{key = Key}, Opts) ->
    {ok, Ent} = actor(Key, []), 
-   ambit_coordinator:whereis(Ent, Opts).
+   ambit_req_whereis:call(Ent, Opts).
 
 %%
 %% return list of successor nodes in ambit cluster

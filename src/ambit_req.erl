@@ -14,6 +14,7 @@
 ]).
 -export([
    call/4
+  ,cast/4
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -119,6 +120,27 @@ call([Vnode | T], Mod, Key, Req, Opts) ->
    end;
 
 call([], _Mod, _Key, _Req, _Opts) ->
+   {error, ebusy}.
+
+%%
+%% asynchronous request to distributed actors
+cast(Mod, Key, Req, Opts) ->
+   cast(ek:successors(ambit, Key), Mod, Key, Req, Opts).
+%%
+%%
+cast([Vnode | T], Mod, Key, Req, Opts) ->
+   %% @todo: lease involves extra RTT to service,
+   %%         design pq / peer api to mitigate the issue
+   case Mod:lease(Vnode) of
+      {error, _} ->
+         cast(T, Mod, Key, Req, Opts);
+      UoW ->
+         pipe:cast(pq:pid(UoW), 
+            {req, UoW, Key, Req, Opts}
+         )
+   end;
+
+cast([], _Mod, _Key, _Req, _Opts) ->
    {error, ebusy}.
 
 %%%----------------------------------------------------------------------------   

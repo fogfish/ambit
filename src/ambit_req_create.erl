@@ -1,5 +1,5 @@
 %% @doc
-%%   ambit spawn request
+%%   ambit spawn transaction
 -module(ambit_req_create).
 -behaviour(ambit_req).
 
@@ -14,8 +14,9 @@
 -export([
    lease/1,
    quorum/2,
+   guid/1,
    monitor/1,
-   cast/2,
+   cast/3,
    unit/1,
    join/2
 ]).
@@ -67,6 +68,12 @@ quorum(Key, Opts) ->
          Peers
    end.
 
+%%
+%% generate globally unique transaction id
+-spec(guid/1 :: (any()) -> any()).
+
+guid(_) ->
+   undefined.
 
 %%
 %%
@@ -75,7 +82,7 @@ monitor({_, _, _, Pid}) ->
 
 %%
 %%
-cast(Vnode, Req) ->
+cast(Vnode, _Tx, Req) ->
    ambit_peer:cast(Vnode, Req).
 
 %%

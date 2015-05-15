@@ -40,6 +40,11 @@ behaviour_info(callbacks) ->
      ,{quorum,   2}
 
       %%
+      %% generate globally unique transaction id
+      %% -spec(guid/1 :: (any()) -> any()).
+     ,{guid,     1}
+
+      %%
       %% monitor transaction actor
       %%
       %% -spec(monitor/1 :: (ek:vnode()) -> reference()). 
@@ -48,8 +53,8 @@ behaviour_info(callbacks) ->
       %%
       %% asynchronously cast request to transaction actor
       %%
-      %% -spec(cast/2 :: (ek:vnode(), any()) -> reference()). 
-     ,{cast,    2} 
+      %% -spec(cast/2 :: (ek:vnode(), uid:g(), any()) -> reference()). 
+     ,{cast,    3} 
 
       %%
       %% accept response from transaction actor, 
@@ -61,7 +66,7 @@ behaviour_info(callbacks) ->
       %%
       %% accumulates and merges correlated response
       %%
-      %% -spec(join/1 :: (any(), any()) -> any()).
+      %% -spec(join/2 :: (any(), any()) -> any()).
      ,{join,    2}
    ];
 behaviour_info(_) ->
@@ -214,9 +219,10 @@ req_free(#{mod := Mod, uow := UoW}) ->
 %%
 %% cast request to each peer 
 req_cast(Peers, Key, Req, #{mod := Mod, t := T}=State) ->
+   Tx   = Mod:guid(Key),
    List = lists:map(
       fun(Peer) ->
-         {Mod:monitor(Peer), Peer, Mod:cast(Peer, Req)}
+         {Mod:monitor(Peer), Peer, Mod:cast(Peer, Tx, Req)}
       end,
       Peers
    ),

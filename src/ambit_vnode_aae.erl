@@ -7,6 +7,7 @@
 
 -export([
    new/1
+  ,free/2
   ,peers/1
   ,session/2
   ,handshake/3
@@ -23,6 +24,14 @@
 new([{_, Addr, Key, Peer}=Vnode]) ->
    ok = pns:register(vnode_sys, {aae, Addr}, self()), 
    {{ae, Addr, Key, Peer}, Vnode}. 
+
+%%
+%% terminate anti-entropy state either session or leader
+-spec(free/2 :: (any(), ek:vnode()) -> ok).
+
+free(_, _) ->
+   ok.
+
 
 %%
 %% return list of candidate peers (potential successors)

@@ -80,12 +80,36 @@ primary({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
 
 primary({sync, Peer}, _, #{vnode := {_, Addr, _, _} = Vnode}=State) ->
    ?NOTICE("ambit [vnode]: sync ~p with ~p", [Vnode, Peer]),
-   %% @todo: actor sync procedure in async manner 
+   %% @todo: sync requires aae + async sync (vs explicit recovery)
+   %% @todo: make asynchronous handoff with long-term expectation of data transfer
+   %%        handoff is only "create feature"
    lists:foreach(
       fun({Name, _Pid}) ->
-         %% @todo: make asynchronous handoff with long-term expectation of data transfer
-         %%        handoff is only "create feature"
-         ambit_actor:sync(Addr, Name, Peer)
+         case ambit_actor:service(Addr, Name) of
+            %% service died during transfer i/o
+            undefined ->
+               ok;
+
+            %% service is removed skip sync
+            #entity{val = undefined} ->
+               ok;
+
+            %% sync existed service
+            Entity ->
+               case ambit_actor:sync(Addr, Name, Peer) of
+                  %% try to recover an actor
+                  {error, nonode} ->
+                     Tx = ambit_peer:cast(Peer, {create, Entity}),
+                     receive
+                        {Tx, _} ->
+                           ambit_actor:sync(Addr, Name, Peer)
+                     after ?CONFIG_TIMEOUT_REQ ->
+                        ?ERROR("ambit [vnode]: sync recovery timeout ~p", [Peer])
+                     end;
+                  ok ->
+                     ambit_actor:sync(Addr, Name, Peer)
+               end
+         end
       end,
       pns:lookup(Addr, '_')
    ),

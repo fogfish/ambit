@@ -30,8 +30,8 @@ start_link() ->
    pipe:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-   %% @todo: move under root sup
-   {ok,    _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
+   {ok, _} = ek:seed(opts:val(seed, [], ambit)),
+   {ok, _} = ek:create(ambit, opts:val(ring, ?CONFIG_RING, ambit)),
    Node = scalar:s(erlang:node()),
    ok   = ek:join(ambit, Node, self()),
    {ok, handle, 

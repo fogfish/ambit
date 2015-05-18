@@ -5,6 +5,10 @@
 
 %% @todo: 
 %%   * write-repair (if handoff node do not exist during write)
+%%     a) make N-primary shard
+%%     b) spawn actor + i/o data
+%%     c) kill one primary shard
+%%     d) i/o data, handoff node misses actor (actor needs to be spawned)
 
 -export([behaviour_info/1]).
 -export([

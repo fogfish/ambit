@@ -59,7 +59,6 @@ ioctl(_, _) ->
 coordinator({_, _, _, Pid}, Pool) ->
    pipe:call(Pid, {coordinator, Pool}, infinity).
 
-
 %%
 %% get vnode status 
 -spec(i/1 :: (ek:vnode()) -> any()).
@@ -100,6 +99,12 @@ handle({coordinator, Pool}, Pipe, State) ->
 handle({i, {_, Addr, _, _}}, Pipe, State) ->
 	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
    {next_state, handle, State};
+
+% handle({cast, {_, Addr, _, _}, {whereis, #entity{key = Key}}}, Pipe, State) ->
+%    pipe:a(Pipe, 
+%       pns:whereis(ambit, {Addr, Key})
+%    ),
+%    {next_state, handle, State};
 
 handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of
@@ -143,6 +148,7 @@ handle({leave, _Peer}, _Tx, State) ->
    {next_state, handle, State};
 
 handle(_Msg, _Pipe, State) ->
+   io:format("==> fu ~p~n", [_Msg]),
    {next_state, handle, State}.
 
 

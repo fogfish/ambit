@@ -8,9 +8,9 @@
 -define(SERVICE, {ambit_echo, start_link, []}).
 
 new(1) ->
-   lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, info)),
+   lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, debug)),
 	ambit:start(),
-   timer:sleep(10000),
+   timer:sleep(5000),
 	{ok, #{}};
 new(_) ->
    {ok, #{}}.
@@ -18,20 +18,17 @@ new(_) ->
 %%
 %%
 run(spawn, KeyGen, _ValGen, State) ->
-   % Nodes = erlang:nodes(),
-   % Node  = lists:nth(random:uniform(length(Nodes)), Nodes),
    case
-      ambit:spawn(scalar:s(KeyGen()), ?SERVICE)
+      ambit:spawn(ambit:actor(scalar:s(KeyGen()), ?SERVICE))
    of
-      ok ->
-         {ok,  State};
       {error, Reason} ->
-         {error, Reason, State}
+         {error, Reason, State};
+
+      _ ->
+         {ok,  State}
    end;
 
 run(whereis, KeyGen, _ValGen, State) ->
-   % Nodes = erlang:nodes(),
-   % Node  = lists:nth(random:uniform(length(Nodes)), Nodes),
    case
       ambit:whereis(scalar:s(KeyGen()))
    of
@@ -92,8 +89,13 @@ loop(Pid, _Id, 0) ->
    Pid ! {ok, self()};
 loop(Pid,  Id, N) ->
    Key     = <<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>,
-   {ok, A} = ambit:actor(Key, ?SERVICE),
-   {ok, _} = ambit:spawn(A),
+   ambit:whereis(Key),
+   % case ambit:spawn(ambit:actor(Key, ?SERVICE)) of
+   %    {error, Reason} ->
+   %       io:format("[error] ~p~n", [Reason]);
+   %    _ ->
+   %       ok
+   % end,
    loop(Pid, Id, N - 1).
 
 

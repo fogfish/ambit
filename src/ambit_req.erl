@@ -31,14 +31,14 @@ behaviour_info(callbacks) ->
       %% lease coordinator unit-of-work, return unit-of-work descriptor
       %%
       %% -spec(lease/1 :: (ek:vnode()) -> pq:uow() | {error, any()}).
-      {lease,   1}
+      % {lease,   1}
 
       %%
       %% assert sloppy quorum requirement for given key, 
       %% return list of vnode accountable for the key
       %%
       %% -spec(quorum/2 :: (any(), list()) -> false | [ek:vnode()]).
-     ,{quorum,   2}
+      {quorum,   2}
 
       %%
       %% generate globally unique transaction id
@@ -103,20 +103,22 @@ ioctl(_, _) ->
 %%
 %% synchronous request to distributed actors
 call(Mod, Key, Req, Opts) ->
-   call(ek:successors(ambit, Key), Mod, Key, Req, Opts).
+   Peers = ek:successors(ambit, Key),
+   call(Peers, Mod, Key, Req, [{peers, Peers} | Opts]).
 %%
 %%
-call([Vnode | T], Mod, Key, Req, Opts) ->
-   %% @todo: lease involves extra RTT to service,
-   %%         design pq / peer api to mitigate the issue
-   case Mod:lease(Vnode) of
+call([{_, _, _, Peer} | T], Mod, Key, Req, Opts) ->
+   case 
+      pq:call(
+         {Mod, erlang:node(Peer)}, 
+         {req, Key, Req, Opts}, 
+         opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts)
+      )
+   of
       {error, _} ->
          call(T, Mod, Key, Req, Opts);
-      UoW ->
-         pipe:call(pq:pid(UoW), 
-            {req, UoW, Key, Req, Opts}, 
-            opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts)
-         )
+      Result ->
+         Result
    end;
 
 call([], _Mod, _Key, _Req, _Opts) ->
@@ -129,6 +131,7 @@ cast(Mod, Key, Req, Opts) ->
 %%
 %%
 cast([Vnode | T], Mod, Key, Req, Opts) ->
+   %% @todo: fucking major bottneck
    %% @todo: lease involves extra RTT to service,
    %%         design pq / peer api to mitigate the issue
    case Mod:lease(Vnode) of
@@ -151,19 +154,18 @@ cast([], _Mod, _Key, _Req, _Opts) ->
 
 %%
 %%
-idle({req, UoW, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
+idle({req, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
    ?DEBUG("[~p] request ~p ~p", [self(), Key, Req]),
    case Mod:quorum(Key, Opts) of
       %%
       false ->
          pipe:a(Pipe, {error, quorum}),
-         pq:release(UoW),
          {next_state, idle, #{mod => Mod}};
       %%
       Peers ->
          {next_state, active,
             req_cast(Peers, Key, Req,
-               req_new(Mod, UoW, Pipe, Opts)
+               req_new(Mod, Pipe, Opts)
             )
          }
    end.         
@@ -222,10 +224,9 @@ active(timeout, _Pipe, {_, Req0}) ->
 
 %%
 %% initialize empty multi-cast request
-req_new(Mod, UoW, Pipe, Opts) ->
+req_new(Mod, Pipe, Opts) ->
    #{
       mod   => Mod,
-      uow   => UoW, 
       pipe  => Pipe,
       n     => opts:val(r, opts:val(w, ?CONFIG_W, Opts), Opts),
       t     => opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts),
@@ -234,8 +235,7 @@ req_new(Mod, UoW, Pipe, Opts) ->
 
 %%
 %%
-req_free(#{mod := Mod, uow := UoW}) ->
-   pq:release(UoW),
+req_free(#{mod := Mod}) ->
    #{mod => Mod}.
 
 %%

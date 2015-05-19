@@ -108,10 +108,18 @@ call(Mod, Key, Req, Opts) ->
 %%
 %%
 call([{_, _, _, Peer} | T], Mod, Key, Req, Opts) ->
+%   case pq:lease({Mod, erlang:node(Peer)}) of
+%      {error, _} ->
+%         cast(T, Mod, Key, Req, Opts);
+%      UoW ->
+%         pipe:call(pq:pid(UoW), 
+%            {req, UoW, Key, Req, Opts}
+%         )
+%   end;
    case 
       pq:call(
          {Mod, erlang:node(Peer)}, 
-         {req, Key, Req, Opts}, 
+         {req, undefined, Key, Req, Opts}, 
          opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts)
       )
    of
@@ -154,7 +162,7 @@ cast([], _Mod, _Key, _Req, _Opts) ->
 
 %%
 %%
-idle({req, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
+idle({req, UoW, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
    ?DEBUG("[~p] request ~p ~p", [self(), Key, Req]),
    case Mod:quorum(Key, Opts) of
       %%
@@ -165,7 +173,7 @@ idle({req, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
       Peers ->
          {next_state, active,
             req_cast(Peers, Key, Req,
-               req_new(Mod, Pipe, Opts)
+               req_new(Mod, UoW, Pipe, Opts)
             )
          }
    end.         
@@ -224,9 +232,10 @@ active(timeout, _Pipe, {_, Req0}) ->
 
 %%
 %% initialize empty multi-cast request
-req_new(Mod, Pipe, Opts) ->
+req_new(Mod, UoW, Pipe, Opts) ->
    #{
       mod   => Mod,
+      uow   => UoW,
       pipe  => Pipe,
       n     => opts:val(r, opts:val(w, ?CONFIG_W, Opts), Opts),
       t     => opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts),
@@ -235,7 +244,8 @@ req_new(Mod, Pipe, Opts) ->
 
 %%
 %%
-req_free(#{mod := Mod}) ->
+req_free(#{mod := Mod, uow := UoW}) ->
+   pq:release(UoW),
    #{mod => Mod}.
 
 %%

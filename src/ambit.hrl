@@ -42,7 +42,7 @@
 %%
 %% request timeout in milliseconds
 -ifndef(CONFIG_TIMEOUT_REQ).
--define(CONFIG_TIMEOUT_REQ,  30000).
+-define(CONFIG_TIMEOUT_REQ,  5000).
 -endif.
 
 %%

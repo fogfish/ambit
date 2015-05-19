@@ -100,11 +100,11 @@ handle({i, {_, Addr, _, _}}, Pipe, State) ->
 	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
    {next_state, handle, State};
 
-% handle({cast, {_, Addr, _, _}, {whereis, #entity{key = Key}}}, Pipe, State) ->
-%    pipe:a(Pipe, 
-%       pns:whereis(ambit, {Addr, Key})
-%    ),
-%    {next_state, handle, State};
+handle({cast, {_, Addr, _, _}, {whereis, #entity{key = Key}}}, Pipe, State) ->
+    pipe:a(Pipe, 
+       pns:whereis(ambit, {Addr, Key})
+    ),
+    {next_state, handle, State};
 
 handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of

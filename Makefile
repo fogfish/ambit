@@ -48,7 +48,7 @@ EFLAGS = \
 	-kernel inet_dist_listen_max 32199 \
 	-env ERL_FULLSWEEP_AFTER 10        \
 	+P 1000000 \
-	+K true +A 160 -sbt ts
+	+K true +A 160 -sbt ts +spp true +zdbbl 65536
 
 #####################################################################
 ##

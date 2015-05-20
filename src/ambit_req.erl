@@ -103,7 +103,7 @@ do_call([{_, _, _, Peer} | Tail], Pool, Req, Opts) ->
    case 
       pq:call({Pool, erlang:node(Peer)}, Req, opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts))
    of
-      {error, _} ->
+      {error, ebusy} ->
          do_call(Tail, Pool, Req, Opts);
       Result ->
          Result

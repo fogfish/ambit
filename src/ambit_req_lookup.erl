@@ -13,7 +13,8 @@
 %% request behavior
 -export([
    % lease/1,
-   quorum/2,
+   % quorum/2,
+   ensure/3,
    guid/1,
    monitor/1,
    cast/3,
@@ -55,18 +56,21 @@ call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
 % lease(Vnode) ->
 %    ambit_peer:coordinator(Vnode, ?MODULE).
 
-%%
-%% 
-quorum(_Key, Opts) ->
-   Peers = opts:val(peers, [], Opts),
-   case 
-      opts:val(r, ?CONFIG_R, Opts)
-   of
-      N when N > length(Peers) ->
-         false;
-      _ ->
-         Peers
-   end.
+% %%
+% %% 
+% quorum(_Key, Opts) ->
+%    Peers = opts:val(peers, [], Opts),
+%    case 
+%       opts:val(r, ?CONFIG_R, Opts)
+%    of
+%       N when N > length(Peers) ->
+%          false;
+%       _ ->
+%          Peers
+%    end.
+
+ensure(_Peers, _Key, _Opts) ->
+   ok.
 
 %%
 %% generate globally unique transaction id

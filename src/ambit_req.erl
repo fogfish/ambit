@@ -14,7 +14,7 @@
 ]).
 -export([
    call/4
-  ,cast/4
+  % ,cast/4
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -28,17 +28,10 @@
 behaviour_info(callbacks) ->
    [
       %%
-      %% lease coordinator unit-of-work, return unit-of-work descriptor
+      %% ensure presence of actor in the cluster
       %%
-      %% -spec(lease/1 :: (ek:vnode()) -> pq:uow() | {error, any()}).
-      % {lease,   1}
-
-      %%
-      %% assert sloppy quorum requirement for given key, 
-      %% return list of vnode accountable for the key
-      %%
-      %% -spec(quorum/2 :: (any(), list()) -> false | [ek:vnode()]).
-      {quorum,   2}
+      %% -spec(ensure/2 :: ([ek:vnode()], list()) -> false | [ek:vnode()]).
+      {ensure,   3}
 
       %%
       %% generate globally unique transaction id
@@ -102,57 +95,44 @@ ioctl(_, _) ->
 
 %%
 %% synchronous request to distributed actors
-call(Mod, Key, Req, Opts) ->
+call(Pool, Key, Req, Opts) ->
    Peers = ek:successors(ambit, Key),
-   call(Peers, Mod, Key, Req, [{peers, Peers} | Opts]).
-%%
-%%
-call([{_, _, _, Peer} | T], Mod, Key, Req, Opts) ->
-%   case pq:lease({Mod, erlang:node(Peer)}) of
-%      {error, _} ->
-%         cast(T, Mod, Key, Req, Opts);
-%      UoW ->
-%         pipe:call(pq:pid(UoW), 
-%            {req, UoW, Key, Req, Opts}
-%         )
-%   end;
+   do_call(Peers, Pool, {req, Peers, Key, Req, Opts}, Opts).
+
+do_call([{_, _, _, Peer} | Tail], Pool, Req, Opts) ->
    case 
-      pq:call(
-         {Mod, erlang:node(Peer)}, 
-         {req, undefined, Key, Req, Opts}, 
-         opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts)
-      )
+      pq:call({Pool, erlang:node(Peer)}, Req, opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts))
    of
       {error, _} ->
-         call(T, Mod, Key, Req, Opts);
+         do_call(Tail, Pool, Req, Opts);
       Result ->
          Result
    end;
 
-call([], _Mod, _Key, _Req, _Opts) ->
+do_call([], _Pool, _Req, _Opts) ->
    {error, ebusy}.
 
-%%
-%% asynchronous request to distributed actors
-cast(Mod, Key, Req, Opts) ->
-   cast(ek:successors(ambit, Key), Mod, Key, Req, Opts).
-%%
-%%
-cast([Vnode | T], Mod, Key, Req, Opts) ->
-   %% @todo: fucking major bottneck
-   %% @todo: lease involves extra RTT to service,
-   %%         design pq / peer api to mitigate the issue
-   case Mod:lease(Vnode) of
-      {error, _} ->
-         cast(T, Mod, Key, Req, Opts);
-      UoW ->
-         pipe:cast(pq:pid(UoW), 
-            {req, UoW, Key, Req, Opts}
-         )
-   end;
+% %%
+% %% asynchronous request to distributed actors
+% cast(Mod, Key, Req, Opts) ->
+%    cast(ek:successors(ambit, Key), Mod, Key, Req, Opts).
+% %%
+% %%
+% cast([Vnode | T], Mod, Key, Req, Opts) ->
+%    %% @todo: fucking major bottneck
+%    %% @todo: lease involves extra RTT to service,
+%    %%         design pq / peer api to mitigate the issue
+%    case Mod:lease(Vnode) of
+%       {error, _} ->
+%          cast(T, Mod, Key, Req, Opts);
+%       UoW ->
+%          pipe:cast(pq:pid(UoW), 
+%             {req, UoW, Key, Req, Opts}
+%          )
+%    end;
 
-cast([], _Mod, _Key, _Req, _Opts) ->
-   {error, ebusy}.
+% cast([], _Mod, _Key, _Req, _Opts) ->
+%    {error, ebusy}.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -162,21 +142,21 @@ cast([], _Mod, _Key, _Req, _Opts) ->
 
 %%
 %%
-idle({req, UoW, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
+idle({req, Peers, Key, Req, Opts}, Pipe, #{mod := Mod}) ->
    ?DEBUG("[~p] request ~p ~p", [self(), Key, Req]),
-   case Mod:quorum(Key, Opts) of
-      %%
-      false ->
-         pipe:a(Pipe, {error, quorum}),
-         {next_state, idle, #{mod => Mod}};
-      %%
-      Peers ->
+   case Mod:ensure(Peers, Key, Opts) of
+      ok ->
          {next_state, active,
             req_cast(Peers, Key, Req,
-               req_new(Mod, UoW, Pipe, Opts)
+               req_new(Mod, Pipe, Opts)
             )
-         }
-   end.         
+         };
+
+      {error, Reason} ->
+         pipe:ack(Pipe, {error, [Reason]}),
+         {next_state, idle, #{mod => Mod}}
+   end.
+
 
 %% 
 %%
@@ -232,10 +212,9 @@ active(timeout, _Pipe, {_, Req0}) ->
 
 %%
 %% initialize empty multi-cast request
-req_new(Mod, UoW, Pipe, Opts) ->
+req_new(Mod, Pipe, Opts) ->
    #{
       mod   => Mod,
-      uow   => UoW,
       pipe  => Pipe,
       n     => opts:val(r, opts:val(w, ?CONFIG_W, Opts), Opts),
       t     => opts:val(t, ?CONFIG_TIMEOUT_REQ, Opts),
@@ -244,8 +223,7 @@ req_new(Mod, UoW, Pipe, Opts) ->
 
 %%
 %%
-req_free(#{mod := Mod, uow := UoW}) ->
-   pq:release(UoW),
+req_free(#{mod := Mod}) ->
    #{mod => Mod}.
 
 %%
@@ -309,12 +287,4 @@ sort({_, {_, undefined}},  {_, {_, _}}) ->
    true;
 sort({_, _},  {_, {_, _}}) ->
    false.
-
-
-
-
-
-
-
-
 

@@ -23,11 +23,11 @@
    lookup/1,
    lookup/2,
    free/1,
-   free/2,
-   whereis/1,
-   whereis/2
+   free/2
 ]).
 -export([
+   whereis/1,
+   whereis/2,
    successors/1,
    predecessors/1,
    i/1,
@@ -142,20 +142,19 @@ lookup(#entity{} = Ent, Opts) ->
    ambit_req_lookup:call(Ent, Opts).
  
 %%
-%% lookup service processes
-%%  Options
-%%    r - number of succeeded reads
--spec(whereis/1 :: (key() | entity()) -> [pid()] | {error, any()}).
--spec(whereis/2 :: (key() | entity(), list()) -> [pid()] | {error, any()}).
+%% utility function to lookup service processes on local node
+%%  
+-spec(whereis/1 :: (any()) -> pid() | undefined).
+-spec(whereis/2 :: (ek:vnode(), any()) -> pid() | undefined).
 
 whereis(Key) ->
-	whereis(Key, []).
+   whereis(hd(ek:successors(ambit, Key)), Key).
 
-whereis(Key, Opts)
- when is_binary(Key) orelse is_integer(Key) ->
-   ambit_req_whereis:call(actor(Key, []), Opts);
-whereis(#entity{key = Key}, Opts) ->
-   ambit_req_whereis:call(actor(Key, []), Opts).
+whereis({_, Addr, _, Pid}, Key)
+ when erlang:node(Pid) =:= erlang:node() ->
+   pns:whereis(ambit, {Addr, Key});
+whereis(_, _) ->
+   undefined.
 
 %%
 %% return list of successor nodes in ambit cluster

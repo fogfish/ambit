@@ -13,7 +13,7 @@
 %% request behaviour
 -export([
    % lease/1,
-   quorum/2,
+   ensure/3,
    guid/1,
    monitor/1,
    cast/3,
@@ -58,16 +58,19 @@ call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
 %%
 %% assert sloppy quorum requirement for given key, 
 %% return list of vnode accountable for the key
--spec(quorum/2 :: (any(), list()) -> false | [ek:vnode()]).
+% -spec(quorum/2 :: (any(), list()) -> false | [ek:vnode()]).
 
-quorum(_Key, Opts) ->
-   Peers = opts:val(peers, [], Opts),
-   case opts:val(w, ?CONFIG_W, Opts) of
-      N when N > length(Peers) ->
-         false;
-      _ ->
-         Peers
-   end.
+% quorum(_Key, Opts) ->
+%    Peers = opts:val(peers, [], Opts),
+%    case opts:val(w, ?CONFIG_W, Opts) of
+%       N when N > length(Peers) ->
+%          false;
+%       _ ->
+%          Peers
+%    end.
+
+ensure(_Peers, _Key, _Opts) ->
+   ok.
 
 %%
 %% generate globally unique transaction id

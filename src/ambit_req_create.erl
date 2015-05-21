@@ -12,11 +12,10 @@
 ]).
 %% request behaviour
 -export([
-   % lease/1,
    ensure/3,
    guid/1,
    monitor/1,
-   cast/3,
+   cast/4,
    unit/1,
    join/2
 ]).
@@ -47,28 +46,8 @@ call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-% %%
-% %% lease coordinator unit-of-work, return unit-of-work descriptor
-% -spec(lease/1 :: (ek:vnode()) -> any() | {error, any()}).
-
-% lease({_, _, _, Vnode}) ->
-%    {?MODULE, erlang:node()}.   
-%    % ambit_peer:coordinator(Vnode, ?MODULE).
-
 %%
-%% assert sloppy quorum requirement for given key, 
-%% return list of vnode accountable for the key
-% -spec(quorum/2 :: (any(), list()) -> false | [ek:vnode()]).
-
-% quorum(_Key, Opts) ->
-%    Peers = opts:val(peers, [], Opts),
-%    case opts:val(w, ?CONFIG_W, Opts) of
-%       N when N > length(Peers) ->
-%          false;
-%       _ ->
-%          Peers
-%    end.
-
+%%
 ensure(_Peers, _Key, _Opts) ->
    ok.
 
@@ -86,7 +65,7 @@ monitor({_, _, _, Pid}) ->
 
 %%
 %% 
-cast(Vnode, _Tx, Req) ->
+cast(Vnode, _Tx, _Key, Req) ->
    ambit_peer:cast(Vnode, Req).
 
 %%

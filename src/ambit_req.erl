@@ -47,8 +47,8 @@ behaviour_info(callbacks) ->
       %%
       %% asynchronously cast request to transaction actor
       %%
-      %% -spec(cast/2 :: (ek:vnode(), uid:g(), any()) -> reference()). 
-     ,{cast,    3} 
+      %% -spec(cast/2 :: (ek:vnode(), uid:g(), any(), any()) -> reference()). 
+     ,{cast,    4} 
 
       %%
       %% accept response from transaction actor, 
@@ -232,7 +232,7 @@ req_cast(Peers, Key, Req, #{mod := Mod, t := T}=State) ->
    Tx   = Mod:guid(Key),
    List = lists:map(
       fun(Peer) ->
-         {Mod:monitor(Peer), Peer, Mod:cast(Peer, Tx, Req)}
+         {Mod:monitor(Peer), Peer, Mod:cast(Peer, Tx, Key, Req)}
       end,
       Peers
    ),

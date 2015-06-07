@@ -1,7 +1,7 @@
 %% @doc
 %%   ambit spawn request
 -module(ambit_req_remove).
--behaviour(ambit_req).
+-behaviour(ambitz).
 
 -include("ambit.hrl").
 
@@ -32,13 +32,13 @@ start_link() ->
    pq:start_link(?MODULE, [
       {type,     reusable}     
      ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, ambit)}    
-     ,{worker,   {ambit_req, start_link, [?MODULE]}}
+     ,{worker,   {ambitz, start_link, [?MODULE]}}
    ]).
 
 %%
 %%
 call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
-   ambit_req:call(?MODULE, Key, {remove, Entity#entity{vsn = uid:vclock(Vsn)}}, Opts).
+   ambitz:call(?MODULE, Key, {remove, Entity#entity{vsn = uid:vclock(Vsn)}}, Opts).
 
 %%%----------------------------------------------------------------------------   
 %%%

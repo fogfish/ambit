@@ -110,27 +110,17 @@ free(Config) ->
    
 %%
 %%
-ping(_Config) -> 
-   Key  = key(),
+ping(Config) -> 
+   N   = opts:val(n, Config),
+   Key = key(),
    {ambit_echo, _, _} = ambitz:service(
       ambitz:spawn(
          ambitz:entity(Key, 
             {ambit_echo, start_link, []}
          )
       )
-   ).
-
-   % ambit:actor(Key, {ambit_echo, start_link, []})
-
-   % Rq0  = ,
-   % Rq1  = ambit:spawn(Rq0),
-   % Ping = [pipe:call(Pid, ping) || Pid <- ambit:whereis(Rq1)],
-   % case length(Ping) of
-   %    X when X > 0 ->
-   %       ok;
-   %    _ ->
-   %       exit(noquorum)
-   % end.
+   ),
+   test = ambitz:call(ambit_req_call, Key, test, [{r, N}]).
 
 
 %%%----------------------------------------------------------------------------   

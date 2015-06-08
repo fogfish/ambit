@@ -109,12 +109,8 @@ handle({i, {_, Addr, _, _}}, Pipe, State) ->
 	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
    {next_state, handle, State};
 
-% handle({cast, {_, Addr, _, _}, {whereis, #entity{key = Key}}}, Pipe, State) ->
-%    pipe:a(Pipe, 
-%       pns:whereis(ambit, {Addr, Key})
-%    ),
-%    {next_state, handle, State};
-
+%%
+%%
 handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of
       {ok,    _} ->
@@ -125,6 +121,21 @@ handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
          {next_state, handle, State}
    end;
 
+handle({cast, Vnode, Key, Msg}, Pipe, State) ->
+   spawn(
+      fun() ->
+         case ambit:whereis(Vnode, Key) of
+            undefined ->
+               pipe:ack(Pipe, {error, noroute});
+            Pid       ->
+               pipe:ack(Pipe, pipe:call(Pid, Msg))
+         end
+      end
+   ),
+   {next_state, handle, State};
+
+%%
+%%
 handle({send, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of
       {ok,    _} ->
@@ -134,6 +145,19 @@ handle({send, Vnode, Msg}, Pipe, #{node := Node}=State) ->
          pipe:a(Pipe, Error),
          {next_state, handle, State}
    end;
+
+handle({send, Vnode, Key, Msg}, _Pipe, State) ->
+   spawn(
+      fun() ->
+         case ambit:whereis(Vnode, Key) of
+            undefined ->
+               ok;
+            Pid       ->
+               pipe:send(Pid, Msg)
+         end
+      end
+   ),
+   {next_state, handle, State};
 
 %%
 %%

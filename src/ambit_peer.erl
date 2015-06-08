@@ -15,7 +15,9 @@
   ,coordinator/2
   ,i/1
   ,cast/2
+  ,cast/3
   ,send/2
+  ,send/3
 ]).
 
 %% @todo: vnode management api
@@ -67,19 +69,26 @@ i({_, _, _, Peer} = Vnode) ->
 	pipe:call(Peer, {i, Vnode}).
 
 %%
-%% cast message to vnode
+%% cast message to vnode (or actor)
 -spec(cast/2 :: (ek:vnode(), any()) -> reference()).
+-spec(cast/3 :: (ek:vnode(), binary(), any()) -> reference()).
 
 cast({_, _, _, Pid} = Vnode, Msg) ->
    pipe:cast(Pid, {cast, Vnode, Msg}).
 
+cast({_, _, _, Pid} = Vnode, Key, Msg) ->
+   pipe:cast(Pid, {cast, Vnode, Key, Msg}).
+
 %%
-%% send message to vnode
+%% send message to vnode (or actor)
 -spec(send/2 :: (ek:vnode(), any()) -> ok).
+-spec(send/3 :: (ek:vnode(), binary(), any()) -> ok).
 
 send({_, _, _, Pid} = Vnode, Msg) ->
    pipe:send(Pid, {send, Vnode, Msg}).
 
+send({_, _, _, Pid} = Vnode, Key, Msg) ->
+   pipe:send(Pid, {send, Vnode, Key, Msg}).
 
 
 %%%----------------------------------------------------------------------------   
@@ -100,11 +109,11 @@ handle({i, {_, Addr, _, _}}, Pipe, State) ->
 	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
    {next_state, handle, State};
 
-handle({cast, {_, Addr, _, _}, {whereis, #entity{key = Key}}}, Pipe, State) ->
-    pipe:a(Pipe, 
-       pns:whereis(ambit, {Addr, Key})
-    ),
-    {next_state, handle, State};
+% handle({cast, {_, Addr, _, _}, {whereis, #entity{key = Key}}}, Pipe, State) ->
+%    pipe:a(Pipe, 
+%       pns:whereis(ambit, {Addr, Key})
+%    ),
+%    {next_state, handle, State};
 
 handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of

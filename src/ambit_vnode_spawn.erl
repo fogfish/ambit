@@ -4,6 +4,7 @@
 -behaviour(pipe).
 
 -include("ambit.hrl").
+-include_lib("ambitz/include/ambitz.hrl").
 
 -export([
    start_link/1

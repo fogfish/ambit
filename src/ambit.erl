@@ -11,20 +11,20 @@
 %%     d) i/o data, handoff node misses actor (actor needs to be spawned)
 
 -export([behaviour_info/1]).
--export([
-   actor/1,
-   actor/2,
-   get/1,
-   set/2
-]).
--export([
-   spawn/1,
-   spawn/2,
-   lookup/1,
-   lookup/2,
-   free/1,
-   free/2
-]).
+% -export([
+%    actor/1,
+%    actor/2,
+%    get/1,
+%    set/2
+% ]).
+% -export([
+%    spawn/1,
+%    spawn/2,
+%    lookup/1,
+%    lookup/2,
+%    free/1,
+%    free/2
+% ]).
 -export([
    whereis/1,
    whereis/2,
@@ -34,8 +34,8 @@
    start/0
 ]).
 
--type(key()    :: binary()).
--type(entity() :: #entity{}).
+% -type(key()    :: binary()).
+% -type(entity() :: #entity{}).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -74,72 +74,72 @@ behaviour_info(_) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%% create casual context for actor entity
--spec(actor/1 :: (binary()) -> entity()).
--spec(actor/2 :: (binary(), any()) -> entity()).
+% %%
+% %% create casual context for actor entity
+% -spec(actor/1 :: (binary()) -> entity()).
+% -spec(actor/2 :: (binary(), any()) -> entity()).
 
-actor(Key) ->
-   #entity{key = Key}.
+% actor(Key) ->
+%    #entity{key = Key}.
 
-actor(Key, Service) ->
-   #entity{key = Key, val = Service}.
+% actor(Key, Service) ->
+%    #entity{key = Key, val = Service}.
 
-%%
-%% get casual context property
--spec(get/1 :: (entity()) -> any() | undefined).
+% %%
+% %% get casual context property
+% -spec(get/1 :: (entity()) -> any() | undefined).
 
-get(#entity{val = Service}) ->
-   Service.
+% get(#entity{val = Service}) ->
+%    Service.
 
-%%
-%% get casual context property
--spec(set/2 :: (entity(), any()) -> entity()).
+% %%
+% %% get casual context property
+% -spec(set/2 :: (entity(), any()) -> entity()).
 
-set(#entity{} = Ent, Service) ->
-   Ent#entity{val = Service}.
+% set(#entity{} = Ent, Service) ->
+%    Ent#entity{val = Service}.
 
-%%
-%% spawn service on the cluster
-%%  Options
-%%    w - number of succeeded writes
--spec(spawn/1 :: (entity()) -> entity() | {error, any()}).
--spec(spawn/2 :: (entity(), list()) -> entity() | {error, any()}).
+% %%
+% %% spawn service on the cluster
+% %%  Options
+% %%    w - number of succeeded writes
+% -spec(spawn/1 :: (entity()) -> entity() | {error, any()}).
+% -spec(spawn/2 :: (entity(), list()) -> entity() | {error, any()}).
 
-spawn(Entity) ->
-   ambit:spawn(Entity, []).
+% spawn(Entity) ->
+%    ambit:spawn(Entity, []).
 
-spawn(Entity, Opts) ->
-   ambit_req_create:call(Entity, Opts).
+% spawn(Entity, Opts) ->
+%    ambit_req_create:call(Entity, Opts).
    
-%%
-%% free service on the cluster
-%%  Options
-%%    w - number of succeeded writes
--spec(free/1 :: (entity()) -> entity() | {error, any()}).
--spec(free/2 :: (entity(), list()) -> entity() | {error, any()}).
+% %%
+% %% free service on the cluster
+% %%  Options
+% %%    w - number of succeeded writes
+% -spec(free/1 :: (entity()) -> entity() | {error, any()}).
+% -spec(free/2 :: (entity(), list()) -> entity() | {error, any()}).
 
-free(Entity) ->
-	free(Entity, []).
+% free(Entity) ->
+% 	free(Entity, []).
 
-free(Entity, Opts) ->
-   ambit_req_remove:call(Entity, Opts).
+% free(Entity, Opts) ->
+%    ambit_req_remove:call(Entity, Opts).
 
-%%
-%% lookup service on the cluster
-%%  Options
-%%    r - number of succeeded reads
--spec(lookup/1 :: (key() | entity()) -> entity() | {error, any()}).
--spec(lookup/2 :: (key() | entity(), any()) -> entity() | {error, any()}).
+% %%
+% %% lookup service on the cluster
+% %%  Options
+% %%    r - number of succeeded reads
+% -spec(lookup/1 :: (key() | entity()) -> entity() | {error, any()}).
+% -spec(lookup/2 :: (key() | entity(), any()) -> entity() | {error, any()}).
 
-lookup(Key) ->
-   ambit:lookup(Key, []).
+% lookup(Key) ->
+%    ambit:lookup(Key, []).
 
-lookup(Key, Opts)
- when is_binary(Key) orelse is_integer(Key) ->
-   ambit_req_lookup:call(actor(Key), Opts);
-lookup(#entity{} = Ent, Opts) ->
-   ambit_req_lookup:call(Ent, Opts).
+% lookup(Key, Opts)
+%  when is_binary(Key) orelse is_integer(Key) ->
+%    ambit_req_lookup:call(actor(Key), Opts);
+% lookup(#entity{} = Ent, Opts) ->
+%    ambit_req_lookup:call(Ent, Opts).
  
 %%
 %% utility function to lookup service processes on local node

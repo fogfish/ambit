@@ -82,48 +82,55 @@ end_per_group(_, _Config) ->
 spawn(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   Rq0 = ambit:actor(Key, {ambit_echo, start_link, []}),
-   Rq1 = ambit:spawn(Rq0, [{w, N}]),
-   Pid = ambit:whereis(Rq1, [{r, N}]),
-   case length(Pid) of
-      X when X >= N ->
-         ok;
-      _ ->
-         ct:pal("[spawn] ~p ~p", [Key, [erlang:node(X)||X <- Pid]]),
-         exit(noquorum)
-   end.
-
+   {ambit_echo, _, _} = ambitz:service(
+      ambitz:spawn(
+         ambitz:entity(Key, 
+            {ambit_echo, start_link, []}
+         ),
+         [{w, N}]
+      )
+   ).
 
 %%
 %%
 free(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   Rq0 = ambit:actor(Key, {ambit_echo, start_link, []}),
-   Rq1 = ambit:spawn(Rq0),
-   Rq2 = ambit:free(Rq1),
-   %% free is not committed by each sibling peer due to eventual consistency.
-   %% operation is succeeded when N sibling is committed 
-   case ambit:whereis(Rq2) of
-      List when length(List) =< 3 - N ->
-         ok;
-      _ ->
-         exit(failed)
-   end.
-
+   undefined = ambitz:service(
+      ambitz:free(
+         ambitz:spawn(
+            ambitz:entity(Key, 
+               {ambit_echo, start_link, []}
+            ),
+            [{w, N}]
+         ),
+         [{w, N}]         
+      )
+   ).
+   
 %%
 %%
 ping(_Config) -> 
    Key  = key(),
-   Rq0  = ambit:actor(Key, {ambit_echo, start_link, []}),
-   Rq1  = ambit:spawn(Rq0),
-   Ping = [pipe:call(Pid, ping) || Pid <- ambit:whereis(Rq1)],
-   case length(Ping) of
-      X when X > 0 ->
-         ok;
-      _ ->
-         exit(noquorum)
-   end.
+   {ambit_echo, _, _} = ambitz:service(
+      ambitz:spawn(
+         ambitz:entity(Key, 
+            {ambit_echo, start_link, []}
+         )
+      )
+   ).
+
+   % ambit:actor(Key, {ambit_echo, start_link, []})
+
+   % Rq0  = ,
+   % Rq1  = ambit:spawn(Rq0),
+   % Ping = [pipe:call(Pid, ping) || Pid <- ambit:whereis(Rq1)],
+   % case length(Ping) of
+   %    X when X > 0 ->
+   %       ok;
+   %    _ ->
+   %       exit(noquorum)
+   % end.
 
 
 %%%----------------------------------------------------------------------------   

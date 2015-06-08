@@ -4,11 +4,12 @@
 -behaviour(ambitz).
 
 -include("ambit.hrl").
+-include_lib("ambitz/include/ambitz.hrl").
 
 %% api
 -export([
-   start_link/0,
-   call/2
+   start_link/0
+   % call/2
 ]).
 %% request behavior
 -export([
@@ -37,8 +38,8 @@ start_link() ->
 
 %%
 %%
-call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
-   ambitz:call(?MODULE, Key, {lookup, Entity#entity{vsn = uid:vclock(Vsn)}}, Opts).
+% call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
+%    ambitz:call(?MODULE, Key, {lookup, Entity#entity{vsn = uid:vclock(Vsn)}}, Opts).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -65,7 +66,7 @@ monitor({_, _, _, Pid}) ->
 
 %%
 %%
-cast(Vnode, _Tx, _Key, Req) ->
+cast(Vnode, _Key, Req, _Opts) ->
    ambit_peer:cast(Vnode, Req).
 
 %%

@@ -4,6 +4,7 @@
 -behaviour(aae).
 
 -include("ambit.hrl").
+-include_lib("ambitz/include/ambitz.hrl").
 
 -export([
    new/1

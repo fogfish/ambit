@@ -7,9 +7,7 @@
 -include_lib("ambitz/include/ambitz.hrl").
 
 %% api
--export([
-   start_link/0
-]).
+-export([start_link/0]).
 %% request behaviour
 -export([
    ensure/3,

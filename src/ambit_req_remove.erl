@@ -7,10 +7,7 @@
 -include_lib("ambitz/include/ambitz.hrl").
 
 %% api
--export([
-   start_link/0
-   % call/2
-]).
+-export([start_link/0]).
 %% request behaviour
 -export([
    ensure/3,
@@ -35,11 +32,6 @@ start_link() ->
      ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, ambit)}    
      ,{worker,   {ambitz, start_link, [?MODULE]}}
    ]).
-
-%%
-%%
-% call(#entity{key = Key, vsn = Vsn}=Entity, Opts) ->
-%    ambitz:call(?MODULE, Key, {remove, Entity#entity{vsn = uid:vclock(Vsn)}}, Opts).
 
 %%%----------------------------------------------------------------------------   
 %%%

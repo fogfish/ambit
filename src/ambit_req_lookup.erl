@@ -53,8 +53,8 @@ guid(_) ->
 
 %%
 %%
-monitor({_, _, _, Pid}) ->
-   erlang:monitor(process, Pid).
+monitor(Vnode) ->
+   erlang:monitor(process, ek:vnode(peer, Vnode)).
 
 %%
 %%

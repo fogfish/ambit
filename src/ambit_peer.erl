@@ -32,15 +32,14 @@ start_link() ->
    pipe:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
+   Ring    = opts:val(name, ambit, ambit),
    {ok, _} = ek:seed(opts:val(seed, [], ambit)),
-   {ok, _} = ek:create(
-      opts:val(name, ambit, ambit),
-      opts:val(ring, ?CONFIG_RING, ambit)
-   ),
+   {ok, _} = ek:create(Ring, opts:val(ring, ?CONFIG_RING, ambit)),
    Node = scalar:s(erlang:node()),
-   ok   = ek:join(ambit, Node, self()),
+   ok   = ek:join(Ring, Node, self()),
    {ok, handle, 
       #{
+         ring => Ring,
          node => Node 
       }
    }.
@@ -61,37 +60,37 @@ ioctl(_, _) ->
 %% lease transaction coordinator 
 -spec(coordinator/2 :: (ek:vnode(), atom()) -> any()).
 
-coordinator({_, _, _, Pid}, Pool) ->
-   pipe:call(Pid, {coordinator, Pool}, infinity).
+coordinator(Vnode, Pool) ->
+   pipe:call(ek:vnode(peer, Vnode), {coordinator, Pool}, infinity).
 
 %%
 %% get vnode status 
 -spec(i/1 :: (ek:vnode()) -> any()).
 
-i({_, _, _, Peer} = Vnode) ->
-	pipe:call(Peer, {i, Vnode}).
+i(Vnode) ->
+	pipe:call(ek:vnode(peer, Vnode), {i, Vnode}).
 
 %%
 %% cast message to vnode (or actor)
 -spec(cast/2 :: (ek:vnode(), any()) -> reference()).
 -spec(cast/3 :: (ek:vnode(), binary(), any()) -> reference()).
 
-cast({_, _, _, Pid} = Vnode, Msg) ->
-   pipe:cast(Pid, {cast, Vnode, Msg}).
+cast(Vnode, Msg) ->
+   pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Msg}).
 
-cast({_, _, _, Pid} = Vnode, Key, Msg) ->
-   pipe:cast(Pid, {cast, Vnode, Key, Msg}).
+cast(Vnode, Key, Msg) ->
+   pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Key, Msg}).
 
 %%
 %% send message to vnode (or actor)
 -spec(send/2 :: (ek:vnode(), any()) -> ok).
 -spec(send/3 :: (ek:vnode(), binary(), any()) -> ok).
 
-send({_, _, _, Pid} = Vnode, Msg) ->
-   pipe:send(Pid, {send, Vnode, Msg}).
+send(Vnode, Msg) ->
+   pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Msg}).
 
-send({_, _, _, Pid} = Vnode, Key, Msg) ->
-   pipe:send(Pid, {send, Vnode, Key, Msg}).
+send(Vnode, Key, Msg) ->
+   pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Key, Msg}).
 
 
 %%%----------------------------------------------------------------------------   
@@ -108,8 +107,10 @@ handle({coordinator, Pool}, Pipe, State) ->
    ),
    {next_state, handle, State};
 
-handle({i, {_, Addr, _, _}}, Pipe, State) ->
-	pipe:ack(Pipe, pns:whereis(vnode, Addr)),
+handle({i, Vnode}, Pipe, State) ->
+	pipe:ack(Pipe, 
+      pns:whereis(vnode, ek:vnode(addr, Vnode))
+   ),
    {next_state, handle, State};
 
 %%
@@ -164,11 +165,11 @@ handle({send, Vnode, Key, Msg}, _Pipe, State) ->
 
 %%
 %%
-handle({join, Peer, _Pid}, _Tx, State) ->
+handle({join, Peer, _Pid}, _Tx, #{ring := Ring}=State) ->
    %% new node joined cluster, all local v-nodes needs to be checked
    %% if relocation condition is met
    ?NOTICE("ambit [peer]: join ~p", [Peer]),
-	pts:foreach(fun(Addr, Pid) -> dispatch(Addr, Pid, {join, Peer}) end, vnode),
+	pts:foreach(fun(Addr, Pid) -> dispatch(Ring, Addr, Pid, {join, Peer}) end, vnode),
    {next_state, handle, State};
 
 handle({handoff, _Peer}, _Tx, State) ->
@@ -196,36 +197,39 @@ handle(_Msg, _Pipe, State) ->
 
 %%
 %% ensure vnode is running
-ensure(_Node, {handoff, Addr, Peer, Pid}) ->
+ensure(Node, Vnode) ->
+   ensure(ek:vnode(type, Vnode), ek:vnode(addr, Vnode), Node, Vnode).
+
+ensure(handoff, Addr, _Node, Vnode) ->
    case pns:whereis(vnode, Addr) of
       undefined ->
-         pts:ensure(vnode, Addr, [{handoff, Addr, Peer, Pid}]);
-      Vnode     ->
-         {ok, Vnode}
+         pts:ensure(vnode, Addr, [Vnode]);
+      Pid       ->
+         {ok, Pid}
    end;
 
-ensure(_Node, {_, Addr, Peer, Pid}) ->
+ensure(_Type, Addr, _Node, Vnode) ->
    case pns:whereis(vnode, Addr) of
       undefined ->
-         pts:ensure(vnode, Addr, [{primary, Addr, Peer, Pid}]);
-      Vnode     ->
-         {ok, Vnode}
+         pts:ensure(vnode, Addr, [ek:vnode(type, primary, Vnode)]);
+      Pid       ->
+         {ok, Pid}
    end.
 
 %%
 %% lookup service hand of given Vnode
-lookup({Hand,  Addr, _, _}) ->
-   pns:whereis(vnode_sys, {Hand, Addr}).
+lookup(Vnode) ->
+   pns:whereis(vnode_sys, {ek:vnode(type, Vnode), ek:vnode(addr, Vnode)}).
 
 %%
 %% dispatch cluster event to destination vnode process 
-dispatch({_, _}, _Pid, _Msg) ->
+dispatch(_Ring, {_, _}, _Pid, _Msg) ->
    ok;
-dispatch(_, Pid, Msg) ->
-   dispatch(pipe:ioctl(Pid, vnode), Msg).
+dispatch(Ring, _, Pid, Msg) ->
+   dispatch(Ring, pipe:ioctl(Pid, vnode), Msg).
    
-dispatch({primary, Addr, Node, _}, {join, Peer}) ->
-   List = ek:successors(ambit, Addr),
+dispatch(Ring, {primary, Addr, Node, _}, {join, Peer}) ->
+   List = ek:successors(Ring, Addr),
    case
       {lists:keyfind(Peer, 3, List), lists:keyfind(Node, 3, List)}
    of
@@ -242,8 +246,8 @@ dispatch({primary, Addr, Node, _}, {join, Peer}) ->
          pts:send(vnode, Addr, {sync, Vnode})
    end;
 
-dispatch({handoff, Addr, Node, _}, {join, Peer}) ->
-   List = ek:successors(ambit, Addr),
+dispatch(Ring, {handoff, Addr, Node, _}, {join, Peer}) ->
+   List = ek:successors(Ring, Addr),
    case
       {lists:keyfind(Peer, 3, List), Node =:= Peer}
    of

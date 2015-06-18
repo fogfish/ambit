@@ -47,8 +47,9 @@ init([Sup, Addr, Key, Vnode]) ->
       }
    }.
 
-free(_, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode, entity := #entity{key = Key}}) ->
+free(_, #{sup := Sup, vnode := Vnode, entity := #entity{key = Key}}) ->
    ?DEBUG("ambit [actor]: ~p free ~p", [Vnode, Key]),
+   Addr = ek:vnode(addr, Vnode),
    supervisor:terminate_child(pts:i(factory, Addr), Sup),
    ok.
 
@@ -191,7 +192,8 @@ handle(_, _, State) ->
 
 %%
 %%
-create(#entity{key = Key, val = {Mod, Fun, Arg}}=Entity0, #{sup := Sup, vnode := {_, Addr, _, _} = Vnode} = State) ->
+create(#entity{key = Key, val = {Mod, Fun, Arg}}=Entity0, #{sup := Sup, vnode := Vnode} = State) ->
+   Addr = ek:vnode(addr, Vnode),
    case ambit_actor_sup:init_service(Sup, {Mod, Fun, [Vnode | Arg]}) of
       {ok, Root} ->
          case erlang:function_exported(Mod, process, 1) of
@@ -217,7 +219,8 @@ create(#entity{key = Key, val = {Mod, Fun, Arg}}=Entity0, #{sup := Sup, vnode :=
 
 %%
 %%
-remove(#entity{key = Key} = Entity0, #{sup := Sup, vnode := {_, Addr, _, _}} = State) ->
+remove(#entity{key = Key} = Entity0, #{sup := Sup, vnode := Vnode} = State) ->
+   Addr = ek:vnode(addr, Vnode),
    _ = ambit_actor_sup:free_service(Sup),
    _ = pns:unregister(ambit, {Addr, Key}),
    % _ = pns:unregister(Addr, Key),

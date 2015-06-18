@@ -26,11 +26,11 @@
 %%
 %%
 start_link(Sup, Vnode) ->
-   pipe:start_link(?MODULE, [Sup, Vnode], []).
+   pipe:start_link(?MODULE, [Sup, ek:vnode(type, Vnode), Vnode], []).
 
-init([Sup, {primary, Addr, _, _}=Vnode]) ->
+init([Sup, primary, Vnode]) ->
    ?DEBUG("ambit [vnode]: init ~p", [Vnode]),
-   ok = pns:register(vnode, Addr, self()),
+   ok = pns:register(vnode, ek:vnode(addr, Vnode), self()),
    {ok, primary, 
       #{
          vnode   => Vnode,
@@ -38,9 +38,9 @@ init([Sup, {primary, Addr, _, _}=Vnode]) ->
       }
    };
 
-init([Sup, {handoff, Addr, _, _}=Vnode]) ->
+init([Sup, handoff, Vnode]) ->
    ?DEBUG("ambit [vnode]: init ~p", [Vnode]),
-   ok = pns:register(vnode, Addr, self()),
+   ok = pns:register(vnode, ek:vnode(addr, Vnode), self()),
    {ok, handoff, 
       #{
          vnode   => Vnode,
@@ -50,9 +50,9 @@ init([Sup, {handoff, Addr, _, _}=Vnode]) ->
 
 %%
 %%
-free(_Reason, #{sup := Sup, vnode := {_, Addr, _, _}}) ->
-   ?DEBUG("ambit [vnode]: free ~b ~p", [Addr, _Reason]),
-	ok = pns:unregister(vnode, Addr),
+free(_Reason, #{sup := Sup, vnode := Vnode}) ->
+   ?DEBUG("ambit [vnode]: free ~p ~p", [Vnode, _Reason]),
+	ok = pns:unregister(vnode, ek:vnode(addr, Vnode)),
    supervisor:terminate_child(pts:i(factory, vnode), Sup),
    ok.
 
@@ -69,21 +69,22 @@ ioctl(_, _) ->
 
 %%
 %%
-primary({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
+primary({handoff, Peer}, _,  #{vnode := Vnode}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
    erlang:send(self(), transfer),
    {next_state, suspend, 
       State#{
          handoff => Peer,
-         stream  => stream:build(pns:lookup(Addr, '_'))
+         stream  => stream:build(pns:lookup(ek:vnode(addr, Vnode), '_'))
       }
    };
 
-primary({sync, Peer}, _, #{vnode := {_, Addr, _, _} = Vnode}=State) ->
+primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
    ?NOTICE("ambit [vnode]: sync ~p with ~p", [Vnode, Peer]),
    %% @todo: sync requires aae + async sync (vs explicit recovery)
    %% @todo: make asynchronous handoff with long-term expectation of data transfer
    %%        handoff is only "create feature"
+   Addr = ek:vnode(addr, Vnode),
    lists:foreach(
       fun({Name, _Pid}) ->
          case ambit_actor:service(Addr, Name) of
@@ -119,13 +120,13 @@ primary({sync, Peer}, _, #{vnode := {_, Addr, _, _} = Vnode}=State) ->
 
 %%
 %%
-handoff({handoff, Peer}, _,  #{vnode := {_, Addr, _, _} = Vnode}=State) ->
+handoff({handoff, Peer}, _,  #{vnode := Vnode}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
    erlang:send(self(), transfer),
    {next_state, suspend, 
       State#{
          handoff => Peer,
-         stream  => stream:build(pns:lookup(Addr, '_'))
+         stream  => stream:build(pns:lookup(ek:vnode(addr, Vnode), '_'))
       }
    };
 
@@ -140,9 +141,9 @@ suspend(transfer, _, #{vnode := _Vnode, stream := {}}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p completed", [_Vnode]),
    {stop, normal, State};
 
-suspend(transfer, _, #{vnode := {_, Addr, _, _}, handoff := Handoff, stream := Stream}=State) ->
+suspend(transfer, _, #{vnode := Vnode, handoff := Handoff, stream := Stream}=State) ->
    {Name, _Pid} = stream:head(Stream),
-   case ambit_actor:service(Addr, Name) of
+   case ambit_actor:service(ek:vnode(addr, Vnode), Name) of
       %% service died during transfer i/o
       undefined ->
          erlang:send(self(), transfer),
@@ -166,12 +167,12 @@ suspend(_, _, State) ->
 
 %%
 %%
-transfer({Tx, _Result}, _, #{tx := Tx, vnode := {_, Addr, _, _}, handoff := Handoff, stream := Stream}=State) ->
+transfer({Tx, _Result}, _, #{tx := Tx, vnode := Vnode, handoff := Handoff, stream := Stream}=State) ->
    ?DEBUG("ambit [vnode]: transfer ~p", [_Result]),
    {Name, _Pid} = stream:head(Stream),
    %% @todo: make asynchronous handoff with long-term expectation of data transfer
    %%        handoff is only "create feature"
-   ambit_actor:handoff(Addr, Name, Handoff),
+   ambit_actor:handoff(ek:vnode(addr, Vnode), Name, Handoff),
    erlang:send(self(), transfer),
    {next_state, suspend, State#{stream => stream:tail(Stream)}};
    

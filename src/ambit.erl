@@ -11,31 +11,13 @@
 %%     d) i/o data, handoff node misses actor (actor needs to be spawned)
 
 -export([behaviour_info/1]).
-% -export([
-%    actor/1,
-%    actor/2,
-%    get/1,
-%    set/2
-% ]).
-% -export([
-%    spawn/1,
-%    spawn/2,
-%    lookup/1,
-%    lookup/2,
-%    free/1,
-%    free/2
-% ]).
+-export([start/0]).
 -export([
-   whereis/1,
    whereis/2,
-   successors/1,
-   predecessors/1,
-   i/1,
-   start/0
+   successors/2,
+   predecessors/2,
+   i/2
 ]).
-
-% -type(key()    :: binary()).
-% -type(entity() :: #entity{}).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -74,102 +56,43 @@ behaviour_info(_) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-% %%
-% %% create casual context for actor entity
-% -spec(actor/1 :: (binary()) -> entity()).
-% -spec(actor/2 :: (binary(), any()) -> entity()).
+%%
+%% RnD application start
+start() ->
+   applib:boot(?MODULE, code:where_is_file("app.config")).
 
-% actor(Key) ->
-%    #entity{key = Key}.
-
-% actor(Key, Service) ->
-%    #entity{key = Key, val = Service}.
-
-% %%
-% %% get casual context property
-% -spec(get/1 :: (entity()) -> any() | undefined).
-
-% get(#entity{val = Service}) ->
-%    Service.
-
-% %%
-% %% get casual context property
-% -spec(set/2 :: (entity(), any()) -> entity()).
-
-% set(#entity{} = Ent, Service) ->
-%    Ent#entity{val = Service}.
-
-% %%
-% %% spawn service on the cluster
-% %%  Options
-% %%    w - number of succeeded writes
-% -spec(spawn/1 :: (entity()) -> entity() | {error, any()}).
-% -spec(spawn/2 :: (entity(), list()) -> entity() | {error, any()}).
-
-% spawn(Entity) ->
-%    ambit:spawn(Entity, []).
-
-% spawn(Entity, Opts) ->
-%    ambit_req_create:call(Entity, Opts).
-   
-% %%
-% %% free service on the cluster
-% %%  Options
-% %%    w - number of succeeded writes
-% -spec(free/1 :: (entity()) -> entity() | {error, any()}).
-% -spec(free/2 :: (entity(), list()) -> entity() | {error, any()}).
-
-% free(Entity) ->
-% 	free(Entity, []).
-
-% free(Entity, Opts) ->
-%    ambit_req_remove:call(Entity, Opts).
-
-% %%
-% %% lookup service on the cluster
-% %%  Options
-% %%    r - number of succeeded reads
-% -spec(lookup/1 :: (key() | entity()) -> entity() | {error, any()}).
-% -spec(lookup/2 :: (key() | entity(), any()) -> entity() | {error, any()}).
-
-% lookup(Key) ->
-%    ambit:lookup(Key, []).
-
-% lookup(Key, Opts)
-%  when is_binary(Key) orelse is_integer(Key) ->
-%    ambit_req_lookup:call(actor(Key), Opts);
-% lookup(#entity{} = Ent, Opts) ->
-%    ambit_req_lookup:call(Ent, Opts).
  
 %%
 %% utility function to lookup service processes on local node
 %%  
--spec(whereis/1 :: (any()) -> pid() | undefined).
--spec(whereis/2 :: (ek:vnode(), any()) -> pid() | undefined).
+-spec(whereis/2 :: (atom() | ek:vnode(), any()) -> pid() | undefined).
 
-whereis(Key) ->
-   whereis(hd(ek:successors(ambit, Key)), Key).
+whereis(Ring, Key)
+ when is_atom(Ring) ->
+   whereis(hd(ek:successors(Ring, Key)), Key);
 
-whereis({_, Addr, _, Pid}, Key)
+whereis(Vnode, Key) ->
+   whereis(ek:vnode(ring, Vnode), ek:vnode(addr, Vnode), ek:vnode(peer, Vnode), Key).
+
+whereis(Ring, Addr, Pid, Key)
  when erlang:node(Pid) =:= erlang:node() ->
-   pns:whereis(ambit, {Addr, Key});
-whereis(_, _) ->
+   pns:whereis(Ring, {Addr, Key});
+whereis(_, _, _, _) ->
    undefined.
 
 %%
 %% return list of successor nodes in ambit cluster
--spec(successors/1 :: (any()) -> [ek:vnode()]).
+-spec(successors/2 :: (atom(), any()) -> [ek:vnode()]).
 
-successors(Key) ->
-   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- ek:successors(ambit, Key)].
+successors(Ring, Key) ->
+   [ek:vnode(peer, erlang:node(ek:vnode(peer, X)), X) || X <- ek:successors(Ring, Key)].
 
 %%
 %% return list of successor nodes in ambit cluster
--spec(predecessors/1 :: (any()) -> [ek:vnode()]).
+-spec(predecessors/2 :: (atom(), any()) -> [ek:vnode()]).
 
-predecessors(Key) ->
-   [{A, Addr, Id, erlang:node(Pid)} || {A, Addr, Id, Pid} <- ek:predecessors(ambit, Key)].
-
+predecessors(Ring, Key) ->
+   [ek:vnode(peer, erlang:node(ek:vnode(peer, X)), X) || X <- ek:predecessors(Ring, Key)].
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -184,37 +107,18 @@ predecessors(Key) ->
 %%    * alloc - vnode allocation
 %% @todo:
 %%    vnode capacity
-i(alive) ->
-	[{X, length(Y)} || X <- ek:address(ambit), Y <- [i(X)], length(Y) =/= 0];
+i(Ring, alive) ->
+	[{X, length(Y)} || X <- ek:address(Ring), Y <- [i(Ring, X)], length(Y) =/= 0];
 
-i(alloc) ->
+i(Ring, alloc) ->
 	lists:foldl(
 		fun(X, Acc) -> orddict:update_counter(X, 1, Acc) end,
 		orddict:new(),
-		[Y || X <- ek:address(ambit), {_, _, Y, _} <- i(X)]
+		[ek:vnode(key, Y) || X <- ek:address(Ring), Y <- i(Ring, X)]
 	);
 
-i(Addr) ->
-	[X || X <- ek:successors(ambit, Addr), ambit_peer:i(X) =/= undefined].
-
-
-%%
-%% RnD application start
--define(CONFIG, "./priv/app.config").
-start() ->
-   File = case code:priv_dir(?MODULE) of
-      {error, _} ->
-         ?CONFIG;
-      Path       ->
-         filename:join([Path, "app.config"])
-   end,
-	case filelib:is_file(File) of
-		true ->
-   		applib:boot(?MODULE, File);
-		_    ->
-			applib:boot(?MODULE, [])
-	end.
-
+i(Ring, Addr) ->
+	[X || X <- ek:successors(Ring, Addr), ambit_peer:i(X) =/= undefined].
 
 %%%----------------------------------------------------------------------------   
 %%%

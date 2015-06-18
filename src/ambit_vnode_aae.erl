@@ -22,9 +22,9 @@
 %% return identity of itself and new state data 
 -spec(new/1 :: (list()) -> {ek:vnode(), ek:vnode()}).
 
-new([{_, Addr, Key, Peer}=Vnode]) ->
-   ok = pns:register(vnode_sys, {aae, Addr}, self()), 
-   {{ae, Addr, Key, Peer}, Vnode}. 
+new([Vnode]) ->
+   ok = pns:register(vnode_sys, {aae, ek:vnode(addr, Vnode)}, self()), 
+   {ek:vnode(type, aae, Vnode), Vnode}. 
 
 %%
 %% terminate anti-entropy state either session or leader
@@ -38,10 +38,13 @@ free(_, _) ->
 %% return list of candidate peers (potential successors)
 -spec(peers/1 :: (ek:vnode()) -> {[ek:vnode()], ek:vnode()}).
 
-peers({_, Self, _, _}=State) ->
-   List = [{aae, Addr, Node, Peer} ||
-         {primary, Addr, Node, Peer} <- ek:successors(ambit, Self),
-         erlang:node(Peer) =/= erlang:node()],
+peers(State) ->
+   Ring = ek:vnode(ring, State),
+   Addr = ek:vnode(addr, State),
+   List = [ek:vnode(type, aae, X) || 
+         X <- ek:successors(Ring, Addr),
+         erlang:node( ek:vnode(peer, X) ) =/= erlang:node()
+   ],
    {List, State}.      
 
 %%
@@ -63,7 +66,8 @@ handshake(Peer, Req, State) ->
 %% make snapshot, returns key/val stream 
 -spec(snapshot/1 :: (ek:vnode()) -> {datum:stream(), ek:vnode()}).
 
-snapshot({_, Addr, _, _}=State) ->
+snapshot(State) ->
+   Addr   = ek:vnode(addr, State),
    Stream = stream:build([Name || {Name, _Pid} <- pns:lookup(Addr, '_')]),
    {Stream, State}.
 
@@ -72,7 +76,8 @@ snapshot({_, Addr, _, _}=State) ->
 %%
 -spec(diff/3 :: (ek:vnode(), binary(), ek:vnode()) -> ok).
 
-diff(Peer, Name, {_, Addr, _, _}) ->
+diff(Peer, Name, State) ->
+   Addr    = ek:vnode(addr, State),
    Handoff = erlang:setelement(1, Peer, primary),
    case ambit_actor:service(Addr, Name) of
       %% service died during aae session

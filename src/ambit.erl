@@ -72,12 +72,12 @@ whereis(Ring, Key)
    whereis(hd(ek:successors(Ring, Key)), Key);
 
 whereis(Vnode, Key) ->
-   whereis(ek:vnode(ring, Vnode), ek:vnode(addr, Vnode), ek:vnode(peer, Vnode), Key).
+   whereis(ek:vnode(addr, Vnode), ek:vnode(peer, Vnode), Key).
 
-whereis(Ring, Addr, Pid, Key)
+whereis(Addr, Pid, Key)
  when erlang:node(Pid) =:= erlang:node() ->
-   pns:whereis(Ring, {Addr, Key});
-whereis(_, _, _, _) ->
+   pns:whereis(ambit, {Addr, Key});
+whereis(_, _, _) ->
    undefined.
 
 %%

@@ -226,9 +226,12 @@ lookup(Vnode) ->
 dispatch(_Ring, {_, _}, _Pid, _Msg) ->
    ok;
 dispatch(Ring, _, Pid, Msg) ->
-   dispatch(Ring, pipe:ioctl(Pid, vnode), Msg).
+   Vnode = pipe:ioctl(Pid, vnode),
+   dispatch1(Ring, ek:vnode(type, Vnode), Vnode, Msg).
    
-dispatch(Ring, {primary, Addr, Node, _}, {join, Peer}) ->
+dispatch1(Ring, primary, Vnode, {join, Peer}) ->
+   Addr = ek:vnode(addr, Vnode),
+   Node = ek:vnode(node, Vnode),
    List = ek:successors(Ring, Addr),
    case
       {lists:keyfind(Peer, 3, List), lists:keyfind(Node, 3, List)}
@@ -246,7 +249,9 @@ dispatch(Ring, {primary, Addr, Node, _}, {join, Peer}) ->
          pts:send(vnode, Addr, {sync, Vnode})
    end;
 
-dispatch(Ring, {handoff, Addr, Node, _}, {join, Peer}) ->
+dispatch1(Ring, handoff, Vnode, {join, Peer}) ->
+   Addr = ek:vnode(addr, Vnode),
+   Node = ek:vnode(node, Vnode),
    List = ek:successors(Ring, Addr),
    case
       {lists:keyfind(Peer, 3, List), Node =:= Peer}

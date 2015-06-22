@@ -234,7 +234,7 @@ dispatch1(Ring, primary, Vnode, {join, Peer}) ->
    Node = ek:vnode(node, Vnode),
    List = ek:successors(Ring, Addr),
    case
-      {lists:keyfind(Peer, 3, List), lists:keyfind(Node, 3, List)}
+      {lists:keyfind(Peer, 4, List), lists:keyfind(Node, 4, List)}
    of
       %% joined peer is not part of vnode successor list, skip to next one 
       {false,     _} ->
@@ -254,7 +254,7 @@ dispatch1(Ring, handoff, Vnode, {join, Peer}) ->
    Node = ek:vnode(node, Vnode),
    List = ek:successors(Ring, Addr),
    case
-      {lists:keyfind(Peer, 3, List), Node =:= Peer}
+      {lists:keyfind(Peer, 4, List), Node =:= Peer}
    of
       %% joined peer is not part of vnode successor list, skip to next one 
       {false, _} ->

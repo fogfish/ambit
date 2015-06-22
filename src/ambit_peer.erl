@@ -241,12 +241,12 @@ dispatch1(Ring, primary, Vnode, {join, Peer}) ->
          ok;
 
       %% joined peer overtake local vnode, initiate handoff operation
-      {Vnode, false} ->   
-         pts:send(vnode, Addr, {handoff, Vnode});
+      {Vn, false} ->   
+         pts:send(vnode, Addr, {handoff, Vn});
 
       %% joined peer is sibling to local vnode, initiate node repair
-      {Vnode, _} ->
-         pts:send(vnode, Addr, {sync, Vnode})
+      {Vn, _} ->
+         pts:send(vnode, Addr, {sync, Vn})
    end;
 
 dispatch1(Ring, handoff, Vnode, {join, Peer}) ->
@@ -261,8 +261,8 @@ dispatch1(Ring, handoff, Vnode, {join, Peer}) ->
          ok;
 
       %% joined peer overtake local hints, initiate handoff operation
-      {Vnode, true} ->   
-         pts:send(vnode, Addr, {handoff, Vnode});
+      {Vn, true} ->   
+         pts:send(vnode, Addr, {handoff, Vn});
       
       _ ->
          ok

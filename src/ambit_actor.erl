@@ -47,8 +47,8 @@ init([Sup, Addr, Key, Vnode]) ->
       }
    }.
 
-free(_, #{sup := Sup, vnode := Vnode, entity := #entity{key = Key}}) ->
-   ?DEBUG("ambit [actor]: ~p free ~p", [Vnode, Key]),
+free(_, #{sup := Sup, vnode := Vnode, entity := #entity{key = _Key}}) ->
+   ?DEBUG("ambit [actor]: ~p free ~p", [Vnode, _Key]),
    Addr = ek:vnode(addr, Vnode),
    supervisor:terminate_child(pts:i(factory, Addr), Sup),
    ok.
@@ -230,8 +230,8 @@ remove(#entity{key = Key} = Entity0, #{sup := Sup, vnode := Vnode} = State) ->
 
 %%
 %%
-entity(#entity{vsn = VsnA} = Entity0, #{entity := #entity{vsn = VsnB}}) ->
-   Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB)},
+entity(#entity{vsn = VsnA} = Entity0, #{entity := #entity{vsn = VsnB}, vnode := Vnode}) ->
+   Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB), vnode = [Vnode]},
    ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
    Entity1.
 

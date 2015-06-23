@@ -71,8 +71,11 @@ unit({error, Reason}) ->
 
 %%
 %%
-join(#entity{val=Val, vsn=VsnA}, #entity{val=Val, vsn=VsnB}=B) ->
-   B#entity{vsn = uid:join(VsnB, VsnA)};
+% join(#entity{val=Val, vsn=VsnA}, #entity{val=Val, vsn=VsnB}=B) ->
+%    B#entity{vsn = uid:join(VsnB, VsnA)};
+
+join(#entity{val=Val, vsn=VsnA, vnode = VnodeA}, #entity{val=Val, vsn=VsnB, vnode = VnodeB}=B) ->
+   B#entity{vsn = uid:join(VsnB, VsnA), vnode = VnodeB ++ VnodeA};
 
 join({error, A}, {error, B}) ->
    {error, lists:usort(A ++ B)}.

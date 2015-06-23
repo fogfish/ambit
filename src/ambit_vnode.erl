@@ -98,19 +98,20 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
 
             %% sync existed service
             Entity ->
-               case ambit_actor:sync(Addr, Name, Peer) of
-                  %% try to recover an actor
-                  {error, nonode} ->
+               case lists:member(Peer, ambitz:entity(vnode, Entity)) of
+                  false ->
+                     ?NOTICE("ambit [vnode]: sync recovery ~p", [Peer]),
                      Tx = ambit_peer:cast(Peer, {create, Entity}),
                      receive
                         {Tx, _} ->
-                           ambit_actor:sync(Addr, Name, Peer)
+                           ok
                      after ?CONFIG_TIMEOUT_REQ ->
                         ?ERROR("ambit [vnode]: sync recovery timeout ~p", [Peer])
                      end;
-                  ok ->
-                     ambit_actor:sync(Addr, Name, Peer)
-               end
+                  true  ->
+                     ok
+               end,
+               ambit_actor:sync(Addr, Name, Peer)
          end
       end,
       pns:lookup(Addr, '_')

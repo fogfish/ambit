@@ -185,7 +185,6 @@ handle({leave, _Peer}, _Tx, State) ->
    {next_state, handle, State};
 
 handle(_Msg, _Pipe, State) ->
-   io:format("==> fu ~p~n", [_Msg]),
    {next_state, handle, State}.
 
 

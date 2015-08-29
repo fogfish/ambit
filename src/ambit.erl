@@ -114,7 +114,7 @@ i(Ring, alloc) ->
 	lists:foldl(
 		fun(X, Acc) -> orddict:update_counter(X, 1, Acc) end,
 		orddict:new(),
-		[ek:vnode(key, Y) || X <- ek:address(Ring), Y <- i(Ring, X)]
+		[ek:vnode(node, Y) || X <- ek:address(Ring), Y <- i(Ring, X)]
 	);
 
 i(Ring, Addr) ->

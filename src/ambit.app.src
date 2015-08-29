@@ -16,6 +16,7 @@
         ,pq
         ,aae
         ,clue
+        ,uid
       ]},
       {mod, {ambit_app, []}},
       {env, []}

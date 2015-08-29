@@ -52,7 +52,7 @@ run(_, _KeyGen, _ValGen, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
--define(N,         4).
+-define(N,         8).
 -define(LOOP,     60 *  100).
 -define(TIMEOUT,  60 * 1000).
 
@@ -88,14 +88,14 @@ fold([Pid | Pids]) ->
 loop(Pid, _Id, 0) ->
    Pid ! {ok, self()};
 loop(Pid,  Id, N) ->
-   Key     = <<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>,
-   ambit:whereis(Key),
-   % case ambit:spawn(ambit:actor(Key, ?SERVICE)) of
-   %    {error, Reason} ->
-   %       io:format("[error] ~p~n", [Reason]);
-   %    _ ->
-   %       ok
-   % end,
+   Key = <<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>,
+   Req = ambitz:entity(service, ?SERVICE, ambitz:entity(Key)),
+   case ambitz:spawn(Req) of
+      {error, Reason} ->
+         io:format("[error] ~p~n", [Reason]);
+      _ ->
+         ok
+   end,
    loop(Pid, Id, N - 1).
 
 

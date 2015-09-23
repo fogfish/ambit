@@ -83,6 +83,12 @@ handle({lookup, #entity{key = Key}=Entity}, Pipe, Vnode) ->
          {next_state, handle, Vnode}
    end;
 
+handle({process, #entity{key = Key}=Entity}, Pipe, Vnode) ->
+   Addr   = ek:vnode(addr, Vnode),
+   Result = pts:call(Addr, Key, {process, Entity}),
+   pipe:a(Pipe, Result),
+   {next_state, handle, Vnode};
+
 handle({whereis, #entity{key = Key}}, Pipe, Vnode) ->
    Addr = ek:vnode(addr, Vnode),
    pipe:a(Pipe, 

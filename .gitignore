@@ -11,5 +11,6 @@ deps/
 log/
 .eunit/
 rebar
+.rebar/
 *.sublime-*
 tests/

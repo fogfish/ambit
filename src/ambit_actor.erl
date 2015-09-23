@@ -148,6 +148,12 @@ handle({lookup, _Entity}, Pipe, #{entity := Entity}=State) ->
    pipe:ack(Pipe, {ok, Entity}),
    {next_state, handle, State};
 
+handle({process, _Entity}, Pipe, #{entity := Entity, process := Pid}=State) ->
+   %% where is actor (pid discovery)
+   pipe:ack(Pipe, {ok, Entity#entity{val = [Pid]}}),
+   {next_state, handle, State};
+
+
 %%
 %% actor optional signaling
 handle({handoff, Vnode}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}}}=State) ->

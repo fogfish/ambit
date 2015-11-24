@@ -1,3 +1,18 @@
+%%
+%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
+%%
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
+%%
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
+%%
 %% @description
 %%   active anti-entropy
 -module(ambit_vnode_aae).
@@ -23,8 +38,9 @@
 -spec(new/1 :: (list()) -> {ek:vnode(), ek:vnode()}).
 
 new([Vnode]) ->
-   ok = pns:register(vnode_sys, {aae, ek:vnode(addr, Vnode)}, self()), 
-   {ek:vnode(type, aae, Vnode), Vnode}. 
+   Addr = ek:vnode(addr, Vnode),
+   pipe:ioctl(pns:whereis(vnode, Addr), {aae, self()}),
+   {Vnode, Vnode}. 
 
 %%
 %% terminate anti-entropy state either session or leader
@@ -41,9 +57,8 @@ free(_, _) ->
 peers(State) ->
    Ring = ek:vnode(ring, State),
    Addr = ek:vnode(addr, State),
-   List = [ek:vnode(type, aae, X) || 
-         X <- ek:successors(Ring, Addr),
-         erlang:node( ek:vnode(peer, X) ) =/= erlang:node()
+   List = [X || X <- ek:successors(Ring, Addr),
+               erlang:node( ek:vnode(peer, X) ) =/= erlang:node()
    ],
    {List, State}.      
 
@@ -59,7 +74,7 @@ session(_Peer, State) ->
 -spec(handshake/3 :: (ek:vnode(), any(), ek:vnode()) -> ek:vnode()).
 
 handshake(Peer, Req, State) ->
-   ambit_peer:send(Peer, Req),
+   ambit_peer:send(Peer, {aae, Req}),
    State.
 
 %%
@@ -78,6 +93,8 @@ snapshot(State) ->
 
 diff(Peer, Name, State) ->
    Addr    = ek:vnode(addr, State),
+   %% (?) Why do we force node type to primary, it has to be either primary 
+   %%     or handoff depends on the type
    Handoff = erlang:setelement(1, Peer, primary),
    case ambit_actor:service(Addr, Name) of
       %% service died during aae session

@@ -1,3 +1,18 @@
+%%
+%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
+%%
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
+%%
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
+%%
 %% @description
 %%   virtual node supervisor
 -module(ambit_vnode_sup).
@@ -10,9 +25,9 @@
 ]).
 
 %%
--define(CHILD(Type, I),            {I,  {I, start_link,   []}, permanent, 5000, Type, dynamic}).
--define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, permanent, 5000, Type, dynamic}).
--define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, permanent, 5000, Type, dynamic}).
+-define(CHILD(Type, I),            {I,  {I, start_link,   []}, permanent, infinity, Type, []}).
+-define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, permanent, infinity, Type, []}).
+-define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, permanent, infinity, Type, []}).
 
 %%-----------------------------------------------------------------------------
 %%
@@ -26,14 +41,12 @@ start_link(vnode, Addr, Vnode) ->
 init([Addr, Vnode]) ->
    {ok,
       {
-         {one_for_one, 0, 1},
+         {one_for_all, 0, 1},
          [
-				%% @todo: we need to reserve token due to concurrency
-            %%        reserve token at sup and re-bind it to vnode pns:swap
+            %%
             ?CHILD(worker, ambit_vnode, [self(), Vnode])
 
-            %% require before anything
-            %% actor management table
+            %% required before anything else
            ,?CHILD(supervisor, pts, [Addr, ?HEAP_ACTOR])
            
             %% spawn service

@@ -1,3 +1,18 @@
+%%
+%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
+%%
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
+%%
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
+%%
 %% @description
 %%   distributed actor peer - interface for v-node i/o
 -module(ambit_peer).
@@ -117,8 +132,8 @@ handle({i, Vnode}, Pipe, State) ->
 %%
 handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of
-      {ok,    _} ->
-         pipe:emit(Pipe, lookup(Vnode), Msg),
+      {ok,  Pid} ->
+         pipe:emit(Pipe, Pid, Msg),
          {next_state, handle, State};
       {error, _} = Error ->
          pipe:a(Pipe, Error),
@@ -142,8 +157,8 @@ handle({cast, Vnode, Key, Msg}, Pipe, State) ->
 %%
 handle({send, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    case ensure(Node, Vnode) of
-      {ok,    _} ->
-         pipe:emit(Pipe, lookup(Vnode), Msg),
+      {ok,  Pid} ->
+         pipe:emit(Pipe, Pid, Msg),
          {next_state, handle, State};
       {error, _} = Error ->
          pipe:a(Pipe, Error),
@@ -196,29 +211,21 @@ handle(_Msg, _Pipe, State) ->
 
 %%
 %% ensure vnode is running
-ensure(Node, Vnode) ->
-   ensure(ek:vnode(type, Vnode), ek:vnode(addr, Vnode), Node, Vnode).
-
-ensure(handoff, Addr, _Node, Vnode) ->
+ensure(_Node, Vnode) ->
+   ?DEBUG("ambit [peer]: ~p ensure vnode ~p", [_Node, Vnode]),
+   Addr = ek:vnode(addr, Vnode),
    case pns:whereis(vnode, Addr) of
       undefined ->
-         pts:ensure(vnode, Addr, [Vnode]);
-      Pid       ->
-         {ok, Pid}
-   end;
-
-ensure(_Type, Addr, _Node, Vnode) ->
-   case pns:whereis(vnode, Addr) of
-      undefined ->
-         pts:ensure(vnode, Addr, [ek:vnode(type, primary, Vnode)]);
+         pts:ensure(vnode, Addr, [Vnode]),
+         {ok, pns:whereis(vnode, Addr)};
       Pid       ->
          {ok, Pid}
    end.
 
-%%
-%% lookup service hand of given Vnode
-lookup(Vnode) ->
-   pns:whereis(vnode_sys, {ek:vnode(type, Vnode), ek:vnode(addr, Vnode)}).
+% %%
+% %% lookup service hand of given Vnode
+% lookup(Vnode) ->
+%    pns:whereis(vnode_sys, {ek:vnode(type, Vnode), ek:vnode(addr, Vnode)}).
 
 %%
 %% dispatch cluster event to destination vnode process 

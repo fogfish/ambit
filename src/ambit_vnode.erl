@@ -1,3 +1,18 @@
+%%
+%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
+%%
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
+%%
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
+%%
 %% @description
 %%   virtual node coordinator process
 -module(ambit_vnode).
@@ -26,25 +41,15 @@
 %%
 %%
 start_link(Sup, Vnode) ->
-   pipe:start_link(?MODULE, [Sup, ek:vnode(type, Vnode), Vnode], []).
+   pipe:start_link(?MODULE, [Sup, Vnode], []).
 
-init([Sup, primary, Vnode]) ->
+init([Sup, Vnode]) ->
    ?DEBUG("ambit [vnode]: init ~p", [Vnode]),
    ok = pns:register(vnode, ek:vnode(addr, Vnode), self()),
-   {ok, primary, 
+   {ok, ek:vnode(type, Vnode), 
       #{
-         vnode   => Vnode,
-         sup     => Sup   
-      }
-   };
-
-init([Sup, handoff, Vnode]) ->
-   ?DEBUG("ambit [vnode]: init ~p", [Vnode]),
-   ok = pns:register(vnode, ek:vnode(addr, Vnode), self()),
-   {ok, handoff, 
-      #{
-         vnode   => Vnode,
-         sup     => Sup   
+         vnode => Vnode,
+         sup   => Sup   
       }
    }.
 
@@ -58,6 +63,10 @@ free(_Reason, #{sup := Sup, vnode := Vnode}) ->
 
 ioctl(vnode, #{vnode := Vnode}) ->
    Vnode;
+ioctl({spawn, Pid}, State) ->
+   State#{spawn => Pid};
+ioctl({aae, Pid}, State) ->
+   State#{aae => Pid};
 ioctl(_, _) ->
    throw(not_implemented).
 
@@ -69,6 +78,15 @@ ioctl(_, _) ->
 
 %%
 %%
+primary({Req, _} = Request, Pipe, #{spawn := Pid}=State)
+ when ?is_spawn(Req) ->
+   pipe:emit(Pipe, Pid, Request),
+   {next_state, primary, State};
+
+primary({aae, Req}, Pipe, #{aae := Pid}=State) ->
+   pipe:emit(Pipe, Pid, Req),
+   {next_state, primary, State};
+
 primary({handoff, Peer}, _,  #{vnode := Vnode}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
    erlang:send(self(), transfer),
@@ -121,6 +139,16 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
 
 %%
 %%
+handoff({Req, _} = Request, Pipe, #{spawn := Pid}=State)
+ when ?is_spawn(Req) ->
+   pipe:emit(Pipe, Pid, Request),
+   {next_state, handoff, State};
+
+handoff({aae, Req}, Pipe, #{aae := Pid}=State) ->
+   pipe:emit(Pipe, Pid, Req),
+   {next_state, handoff, State};
+
+
 handoff({handoff, Peer}, _,  #{vnode := Vnode}=State) ->
    ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
    erlang:send(self(), transfer),

@@ -1,4 +1,20 @@
 %%
+%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
+%%
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
+%%
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
+%%
+
+%%
 %% default ring
 -ifndef(CONFIG_RING).
 -define(CONFIG_RING, [
@@ -32,6 +48,16 @@
   ,{factory,     temporary}
 ]).
 
+%%
+%% is request to spawn hand
+-define(is_spawn(X), (
+   X =:= create  orelse 
+   X =:= remove  orelse 
+   X =:= lookup  orelse 
+   X =:= process orelse 
+   X =:= whereis
+)).
+
 
 %%
 %% size of ambit api request pool (capacity of coordinator)
@@ -56,15 +82,6 @@
 -ifndef(CONFIG_AAE_CAPACITY).
 -define(CONFIG_AAE_CAPACITY,  5).
 -endif.
-
-% %%
-% %% ambit entity
-% -record(entity, {
-%    %% @todo: address or name so that addr is used for vnode lookup, key as instance naming
-%    key  = undefined :: binary(),
-%    val  = undefined :: any(),
-%    vsn  = []        :: uid:vclock()
-% }).
 
 
 %% 

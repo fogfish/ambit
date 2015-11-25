@@ -43,11 +43,12 @@ start_link(Vnode) ->
    pipe:start_link(?MODULE, [Vnode], []).
 
 init([Vnode]) ->
-   ?ERROR("ambit [echo]: init ~p", [Vnode]),
+   ?DEBUG("ambit [echo]: init ~p", [Vnode]),
+   erlang:process_flag(trap_exit, true),
    {ok, handle, Vnode}.
 
 free(_, Vnode) ->
-   ?ERROR("ambit [echo]: free ~p", [Vnode]),
+   ?DEBUG("ambit [echo]: free ~p", [Vnode]),
    ok.
 
 ioctl(_, _) ->

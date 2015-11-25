@@ -63,10 +63,8 @@ init([Sup, Addr, Key, Vnode]) ->
       }
    }.
 
-free(_, #{sup := Sup, vnode := Vnode, entity := #entity{key = _Key}}) ->
-   ?DEBUG("ambit [actor]: ~p free ~p", [Vnode, _Key]),
-   Addr = ek:vnode(addr, Vnode),
-   supervisor:terminate_child(pts:i(factory, Addr), Sup),
+free(_, #{vnode := _Vnode, entity := #entity{key = _Key}}) ->
+   ?DEBUG("ambit [actor]: free ~p at ~p", [_Key, _Vnode]),
    ok.
 
 %%
@@ -203,8 +201,7 @@ handle(ttl, Tx, #{entity := #entity{vsn = Vsn}=Entity}=State) ->
 handle(ttd,  _, #{entity := #entity{val = undefined}}=State) ->
    {stop, normal, State};   
 
-handle(Xx, _, State) ->
-   io:format("=>>>>>>=> ~p~n", [Xx]),
+handle(_, _, State) ->
    {next_state, handle, State}.
 
 %%%----------------------------------------------------------------------------   

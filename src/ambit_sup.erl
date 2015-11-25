@@ -27,12 +27,6 @@
 -define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, permanent, infinity, Type, dynamic}).
 -define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, permanent, infinity, Type, dynamic}).
 
-% -define(POOL(X), [
-%    {type,     reusable}     
-%   ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, ambit)}    
-%   ,{worker,   X}    
-% ]).
-
 %%-----------------------------------------------------------------------------
 %%
 %% supervisor

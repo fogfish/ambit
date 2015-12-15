@@ -1,6 +1,7 @@
 {code_paths, [
    "./ebin"
   ,"./deps/aae"
+  ,"./deps/ambitz"
   ,"./deps/clue"
   ,"./deps/datum"
   ,"./deps/ek"
@@ -29,5 +30,5 @@
 
 {operations, [
    {spawn,     1} 
-  % ,{whereis,   1} 
+  ,{whereis,   1} 
 ]}.

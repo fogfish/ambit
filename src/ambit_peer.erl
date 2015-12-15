@@ -139,6 +139,7 @@ handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
          pipe:a(Pipe, Error),
          {next_state, handle, State}
    end;
+   
 
 handle({cast, Vnode, Key, Msg}, Pipe, State) ->
    spawn(
@@ -164,6 +165,7 @@ handle({send, Vnode, Msg}, Pipe, #{node := Node}=State) ->
          pipe:a(Pipe, Error),
          {next_state, handle, State}
    end;
+   
 
 handle({send, Vnode, Key, Msg}, _Pipe, State) ->
    spawn(

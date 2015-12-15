@@ -79,7 +79,6 @@ behaviour_info(_) ->
 %% RnD application start
 start() ->
    applib:boot(?MODULE, code:where_is_file("app.config")).
-
  
 %%
 %% utility function to lookup service processes on local node

@@ -23,8 +23,10 @@
 -define(SERVICE, {ambit_echo, start_link, []}).
 
 new(1) ->
+   %% @todo: define application config
    lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, debug)),
-	ambit:start(),
+	ambitz:start(),
+   ek:create(ambit, opts:val(ring, ambit)),
    timer:sleep(5000),
 	{ok, #{}};
 new(_) ->
@@ -34,7 +36,11 @@ new(_) ->
 %%
 run(spawn, KeyGen, _ValGen, State) ->
    case
-      ambit:spawn(ambit:actor(scalar:s(KeyGen()), ?SERVICE))
+      ambitz:spawn(
+         ambitz:entity(service, ?SERVICE, 
+            ambitz:entity(scalar:s(KeyGen()))
+         )
+      )
    of
       {error, Reason} ->
          {error, Reason, State};
@@ -45,16 +51,15 @@ run(spawn, KeyGen, _ValGen, State) ->
 
 run(whereis, KeyGen, _ValGen, State) ->
    case
-      ambit:whereis(scalar:s(KeyGen()))
+      ambitz:whereis(
+         ambitz:entity(scalar:s(KeyGen()))
+      )
    of
       {error, Reason} ->
          {error, Reason, State};
 
-      List when is_list(List), length(List)  > 1 ->
-         {ok,  State};
-
       _ ->
-         {error, na, State}
+         {ok, State}
    end;
 
 
@@ -67,9 +72,9 @@ run(_, _KeyGen, _ValGen, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
--define(N,         8).
--define(LOOP,     60 *  100).
--define(TIMEOUT,  60 * 1000).
+-define(N,        4).
+-define(LOOP,     60 *   100).
+-define(TIMEOUT,  60 *  1000).
 
 run() ->
 	run(erlang:node()).	

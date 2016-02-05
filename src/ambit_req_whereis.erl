@@ -79,14 +79,14 @@ cast(Vnode, _Key, Req, _Opts) ->
 %%
 %%
 unit({ok, #entity{val = _Value}=Entity}) ->
-   {1, Entity};
+   {1, {ok, Entity}};
 
 unit({error, Reason}) ->
    {0, {error, [Reason]}}.
 
 %%
 %%
-join(#entity{val=ValA, vsn=VsnA, vnode = VnodeA}, #entity{val=ValB, vsn=VsnB, vnode = VnodeB}=B) ->
+join({ok, #entity{val=ValA, vsn=VsnA, vnode = VnodeA}}, {ok, #entity{val=ValB, vsn=VsnB, vnode = VnodeB}=B}) ->
    B#entity{val=ValB ++ ValA, vsn = uid:join(VsnB, VsnA), vnode = VnodeB ++ VnodeA};
 
 join({error, A}, {error, B}) ->

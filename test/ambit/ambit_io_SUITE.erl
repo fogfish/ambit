@@ -82,44 +82,39 @@ end_per_group(_, _Config) ->
 spawn(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   {ambit_echo, _, _} = ambitz:entity(service,
-      ambitz:spawn(
-         ambitz:entity(service, {ambit_echo, start_link, []},
-            ambitz:entity(Key)  
-         ),
-         [{w, N}]
-      )
-   ).
+   {ok, Entity} = ambitz:spawn(
+      ambitz:entity(service, {ambit_echo, start_link, []},
+         ambitz:entity(Key)  
+      ),
+      [{w, N}]
+   ),
+   {ambit_echo, _, _} = ambitz:entity(service, Entity).
 
 %%
 %%
 free(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   undefined = ambitz:entity(service,
-      ambitz:free(
-         ambitz:spawn(
-            ambitz:entity(service, {ambit_echo, start_link, []}, 
-               ambitz:entity(Key)
-            ),
-            [{w, N}]
-         ),
-         [{w, N}]         
-      )
-   ).
+   {ok, Entity1} = ambitz:spawn(
+      ambitz:entity(service, {ambit_echo, start_link, []}, 
+         ambitz:entity(Key)
+      ),
+      [{w, N}]
+   ),
+   {ok, Entity2} = ambitz:free(Entity1, [{w, N}]),
+   undefined = ambitz:entity(service, Entity2).
    
 %%
 %%
 ping(Config) -> 
    N   = opts:val(n, Config),
    Key = key(),
-   {ambit_echo, _, _} = ambitz:entity(service,
-      ambitz:spawn(
-         ambitz:entity(service, {ambit_echo, start_link, []},
-            ambitz:entity(Key)
-         )
+   {ok, Entity} = ambitz:spawn(
+      ambitz:entity(service, {ambit_echo, start_link, []},
+         ambitz:entity(Key)
       )
    ),
+   {ambit_echo, _, _} = ambitz:entity(service, Entity),
    test = ambitz:call(ambit_req_call, Key, test, [{r, N}]).
 
 

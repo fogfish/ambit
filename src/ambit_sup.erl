@@ -48,6 +48,7 @@ init([]) ->
            ,?CHILD(worker, ambit_req_lookup)
            ,?CHILD(worker, ambit_req_whereis)
            ,?CHILD(worker, ambit_req_call)
+           ,?CHILD(worker, ambit_req_ping)
 
             %%
             %% vnode management pool

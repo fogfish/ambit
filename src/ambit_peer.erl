@@ -141,6 +141,14 @@ handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    end;
    
 
+handle({cast, Vnode, Key, ping}, Pipe, State) ->
+   spawn(
+      fun() ->
+         pipe:ack(Pipe, {ok, [ambit:whereis(Vnode, Key)]})
+      end
+   ),
+   {next_state, handle, State};
+
 handle({cast, Vnode, Key, Msg}, Pipe, State) ->
    spawn(
       fun() ->

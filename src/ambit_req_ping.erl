@@ -1,5 +1,5 @@
 %%
-%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
+%%   Copyright 2016 Dmitry Kolesnikov, All Rights Reserved
 %%
 %%   Licensed under the Apache License, Version 2.0 (the "License");
 %%   you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 %%   limitations under the License.
 %%
 %% @doc
-%%   ambit spawn transaction
--module(ambit_req_create).
+%%   ambit ping request (cluster topology debug)
+-module(ambit_req_ping).
 -behaviour(ambitz).
 
 -include("ambit.hrl").
@@ -23,7 +23,7 @@
 
 %% api
 -export([start_link/0]).
-%% request behaviour
+%% request behavior
 -export([
    ensure/3,
    guid/1,
@@ -71,25 +71,29 @@ guid(_) ->
 %%
 %%
 monitor(Vnode) ->
-   erlang:monitor(process, ek:vnode(peer, Vnode)). 
-
-%%
-%% 
-cast(Vnode, _Key, Req, _Opts) ->
-   ambit_peer:cast(Vnode, Req).
+   erlang:monitor(process, ek:vnode(peer, Vnode)).
 
 %%
 %%
-unit({ok, #entity{val = Value}=Entity}) ->
-   {erlang:phash2(Value), {ok, Entity}};
+cast(Vnode, Key, Req, _Opts) ->
+   % Ref = erlang:make_ref(),
+   % erlang:spawn(erlang:node(ek:vnode(peer, Vnode)), ambit, xxx, [{Ref, self()}]),
+   % Ref.
+   % io:format("==> ~p~n", [Vnode]),
+   ambit_peer:cast(Vnode, Key, Req).
+
+%%
+%%
+unit({ok, List}) ->
+   {1, {ok, List}};
 
 unit({error, Reason}) ->
    {0, {error, [Reason]}}.
 
 %%
 %%
-join({ok, #entity{val=Val, vsn=VsnA, vnode = VnodeA}}, {ok, #entity{val=Val, vsn=VsnB, vnode = VnodeB}=B}) ->
-   {ok, B#entity{vsn = uid:join(VsnB, VsnA), vnode = VnodeB ++ VnodeA}};
+join({ok, A}, {ok, B}) ->
+   {ok, A ++ B};
 
 join({error, A}, {error, B}) ->
    {error, lists:usort(A ++ B)}.

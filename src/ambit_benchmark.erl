@@ -72,10 +72,12 @@ run(_, _KeyGen, _ValGen, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
--define(N,        4).
--define(LOOP,     60 *   100).
--define(TIMEOUT,  60 *  1000).
+-define(N,         8).
+-define(LOOP,      30 * 1000).
+-define(TIMEOUT,  120 * 1000).
 
+%%
+%%
 run() ->
 	run(erlang:node()).	
 
@@ -83,6 +85,7 @@ run(Seed) ->
    ambit:start(),
    net_adm:ping(Seed),
    Seed =/= erlang:node() andalso timer:sleep(10000),
+   ok   = init(?N),
    case timer:tc(fun() -> exec(?N) end) of
       {T, ok} ->
          TPU = ?N * ?LOOP / T,
@@ -92,9 +95,26 @@ run(Seed) ->
          Error
    end.
 
+%%
+%% init actors for discovery purpose
+init(N) ->
+   lists:foreach(
+      fun(X) ->
+         actor( scalar:s(X) )
+      end,
+      lists:seq(1, N)
+   ).
+   
+actor(N) ->
+   Ent0 = ambitz:entity(scalar:s(N)),
+   {ok, Ent1} = ambitz:lookup(Ent0),
+   {ok, _} = ambitz:spawn(ambitz:entity(service, ?SERVICE, Ent1)).
+
+%%
+%%
 exec(N) ->
    Self = self(),
-   Pids = [spawn_link(fun() -> loop(Self, Id, ?LOOP) end) || Id <- lists:seq(1, N)],
+   Pids = [spawn_link(fun() -> loop(Self, scalar:s(Id), ?LOOP) end) || Id <- lists:seq(1, N)],
    fold(Pids).
 
 fold([]) -> ok;
@@ -105,23 +125,8 @@ fold([Pid | Pids]) ->
       {error, timeout}
    end.
 
-loop(Pid, _Id, 0) ->
+loop(Pid, _Key, 0) ->
    Pid ! {ok, self()};
-loop(Pid,  Id, N) ->
-   Key = <<(scalar:s(Id))/binary, $-, (scalar:s(N))/binary>>,
-   Req = ambitz:entity(service, ?SERVICE, ambitz:entity(Key)),
-   case ambitz:spawn(Req) of
-      {error, Reason} ->
-         io:format("[error] ~p~n", [Reason]);
-      _ ->
-         ok
-   end,
-   loop(Pid, Id, N - 1).
-
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% private
-%%%
-%%%----------------------------------------------------------------------------   
-
+loop(Pid,  Key, N) ->
+   ambitz:whereis(ambitz:entity(Key)),
+   loop(Pid, Key, N - 1).

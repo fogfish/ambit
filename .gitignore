@@ -5,12 +5,11 @@
 *.dump
 *.tag.gz
 *.tgz
+*.lock
 deps.config
-ebin/
-deps/
+_build
 log/
 .eunit/
-rebar
-.rebar/
+rebar3
 *.sublime-*
 tests/

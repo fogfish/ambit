@@ -65,7 +65,7 @@ behaviour_info(callbacks) ->
       %%
       %% -spec(sync/2 :: (pid(), ek:vnode()) -> ok).
      ,{sync,      2}
-	];
+   ];
 behaviour_info(_) ->
    undefined.
 

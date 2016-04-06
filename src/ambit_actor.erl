@@ -235,7 +235,11 @@ create(#entity{key = Key, val = {Mod, Fun, Arg}}=Entity0, #{sup := Sup, vnode :=
          {{ok, Entity1}, State#{entity => Entity1}};
       {error, _} = Error ->
          {Error, State}
-   end.
+   end;
+
+create(#entity{} = Entity0, State) ->
+   Entity1 = entity(Entity0, State),
+   {{ok, Entity1}, State#{entity => Entity1}}.
 
 %%
 %%

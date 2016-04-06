@@ -44,13 +44,6 @@
 start_link() ->
    ambitz:start_link(?MODULE, opts:val(pool, ?CONFIG_IO_POOL, ambit)).
 
-   % pq:start_link(?MODULE, [
-   %    {type,     reusable}     
-   %   ,{capacity, opts:val(pool, ?CONFIG_IO_POOL, ambit)}    
-   %   % ,{worker,   {ambitz, start_link, [?MODULE]}}
-   %   ,{worker,   {ambitz, [?MODULE]}}
-   % ]).
-
 %%%----------------------------------------------------------------------------   
 %%%
 %%% request

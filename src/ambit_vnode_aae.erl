@@ -35,7 +35,7 @@
 %%
 %% initialize anti-entropy leader state
 %% return identity of itself and new state data 
--spec(new/1 :: (list()) -> {ek:vnode(), ek:vnode()}).
+-spec new(list()) -> {ek:vnode(), ek:vnode()}.
 
 new([Vnode]) ->
    Addr = ek:vnode(addr, Vnode),
@@ -44,7 +44,7 @@ new([Vnode]) ->
 
 %%
 %% terminate anti-entropy state either session or leader
--spec(free/2 :: (any(), ek:vnode()) -> ok).
+-spec free(any(), ek:vnode()) -> ok.
 
 free(_, _) ->
    ok.
@@ -52,7 +52,7 @@ free(_, _) ->
 
 %%
 %% return list of candidate peers (potential successors)
--spec(peers/1 :: (ek:vnode()) -> {[ek:vnode()], ek:vnode()}).
+-spec peers(ek:vnode()) -> {[ek:vnode()], ek:vnode()}.
 
 peers(State) ->
    Ring = ek:vnode(ring, State),
@@ -64,14 +64,14 @@ peers(State) ->
 
 %%
 %% initialize new anti-entropy session
--spec(session/2 :: (ek:vnode(), ek:vnode()) -> ek:vnode()).
+-spec session(ek:vnode(), ek:vnode()) -> ek:vnode().
 
 session(_Peer, State) ->
    State.
 
 %%
 %% connect session to selected remote peer using pipe protocol
--spec(handshake/3 :: (ek:vnode(), any(), ek:vnode()) -> ek:vnode()).
+-spec handshake(ek:vnode(), any(), ek:vnode()) -> ek:vnode().
 
 handshake(Peer, Req, State) ->
    ambit_peer:send(Peer, {aae, Req}),
@@ -79,7 +79,7 @@ handshake(Peer, Req, State) ->
 
 %%
 %% make snapshot, returns key/val stream 
--spec(snapshot/1 :: (ek:vnode()) -> {datum:stream(), ek:vnode()}).
+-spec snapshot(ek:vnode()) -> {datum:stream(), ek:vnode()}.
 
 snapshot(State) ->
    Addr   = ek:vnode(addr, State),
@@ -89,7 +89,7 @@ snapshot(State) ->
 %%
 %% remote peer diff, called for each key, order is arbitrary 
 %%
--spec(diff/3 :: (ek:vnode(), binary(), ek:vnode()) -> ok).
+-spec diff(ek:vnode(), binary(), ek:vnode()) -> ok.
 
 diff(Peer, Name, State) ->
    Addr    = ek:vnode(addr, State),

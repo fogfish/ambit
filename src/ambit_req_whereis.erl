@@ -57,8 +57,6 @@ ensure(_Peers, _Key, _Opts) ->
 
 %%
 %% generate globally unique transaction id
--spec(guid/1 :: (any()) -> any()).
-
 guid(_) ->
    undefined.
 

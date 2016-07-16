@@ -83,7 +83,7 @@ start() ->
 %%
 %% utility function to lookup service processes on local node
 %%  
--spec(whereis/2 :: (atom() | ek:vnode(), any()) -> pid() | undefined).
+-spec whereis(atom() | ek:vnode(), any()) -> pid() | undefined.
 
 whereis(Ring, Key)
  when is_atom(Ring) ->
@@ -100,14 +100,14 @@ whereis(_, _, _) ->
 
 %%
 %% return list of successor nodes in ambit cluster
--spec(successors/2 :: (atom(), any()) -> [ek:vnode()]).
+-spec successors(atom(), any()) -> [ek:vnode()].
 
 successors(Ring, Key) ->
    [ek:vnode(peer, erlang:node(ek:vnode(peer, X)), X) || X <- ek:successors(Ring, Key)].
 
 %%
 %% return list of successor nodes in ambit cluster
--spec(predecessors/2 :: (atom(), any()) -> [ek:vnode()]).
+-spec predecessors(atom(), any()) -> [ek:vnode()].
 
 predecessors(Ring, Key) ->
    [ek:vnode(peer, erlang:node(ek:vnode(peer, X)), X) || X <- ek:predecessors(Ring, Key)].

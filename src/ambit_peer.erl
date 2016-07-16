@@ -73,22 +73,22 @@ ioctl(_, _) ->
 
 %%
 %% lease transaction coordinator 
--spec(coordinator/2 :: (ek:vnode(), atom()) -> any()).
+-spec coordinator(ek:vnode(), atom()) -> any().
 
 coordinator(Vnode, Pool) ->
    pipe:call(ek:vnode(peer, Vnode), {coordinator, Pool}, infinity).
 
 %%
 %% get vnode status 
--spec(i/1 :: (ek:vnode()) -> any()).
+-spec i(ek:vnode()) -> any().
 
 i(Vnode) ->
 	pipe:call(ek:vnode(peer, Vnode), {i, Vnode}).
 
 %%
 %% cast message to vnode (or actor)
--spec(cast/2 :: (ek:vnode(), any()) -> reference()).
--spec(cast/3 :: (ek:vnode(), binary(), any()) -> reference()).
+-spec cast(ek:vnode(), any()) -> reference().
+-spec cast(ek:vnode(), binary(), any()) -> reference().
 
 cast(Vnode, Msg) ->
    pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Msg}).
@@ -98,8 +98,8 @@ cast(Vnode, Key, Msg) ->
 
 %%
 %% send message to vnode (or actor)
--spec(send/2 :: (ek:vnode(), any()) -> ok).
--spec(send/3 :: (ek:vnode(), binary(), any()) -> ok).
+-spec send(ek:vnode(), any()) -> ok.
+-spec send(ek:vnode(), binary(), any()) -> ok.
 
 send(Vnode, Msg) ->
    pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Msg}).

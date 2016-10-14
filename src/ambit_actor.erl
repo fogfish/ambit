@@ -195,8 +195,20 @@ accept(accept, call, Entity0, State0) ->
          Entity1 = entity(Entity0, State1),
          {{ok, Entity1#entity{val = Value}}, State1#{entity => Entity1}}
    end;
+
+accept(_, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
+   io:format("==> snap ~p~n", [Snap]),
+   case pipe:ioctl(Pid, {snapshot, Snap}) of
+      {error,   _} = Error ->
+         {Error, State0};
+      ok ->
+         Entity1 = entity(Entity0, State0),
+         {{ok, Entity1}, State0#{entity => Entity1}}
+   end;
+
    
-accept(skip, _Msg, _EntityB, #{entity := EntityA} = State) ->
+accept(skip, _Msg, _EntityB, #{entity := #entity{key =_Key} = EntityA} = State) ->
+   ?DEBUG("ambit [actor]: ~p skips ~p", [_Key, _Msg]),
    {{ok, EntityA}, State};   
 
 accept(conflict, _Msg, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
@@ -466,19 +478,24 @@ syncwith(Peer, #{entity := #entity{key = Key, val = undefined} = Entity}) ->
          ok
    end;
 
-syncwith(Peer, #{entity := #entity{key = Key, vnode = [Vnode]} = Entity, actor := Pid}) ->
+syncwith(Peer, #{entity := #entity{key = Key} = Entity, actor := Pid}) ->
    % @todo: sync internal state
-   Xxx = pipe:ioctl(Pid, state),
-   io:format("==> ~p~n", [Xxx]),
-
    ?NOTICE("ambit [actor]: sync (+) ~p with ~p", [Key, Peer]),
    Tx = ambit_peer:cast(Peer, {'$ambitz', spawn, Entity}),
+   receive
+      {Tx, {ok, En}} ->
+         syncwith1(Peer, Pid, En),
+         ok
+   after ?CONFIG_TIMEOUT_REQ ->
+      ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
+   end.
+
+syncwith1(Peer, Pid, #entity{key = Key} = Entity) ->
+   io:format("======> ssssksk ~p ~p~n", [Peer, Key]),
+   Tx = ambit_peer:cast(Peer, Key, {'$ambitz', snapshot, Entity#entity{val = pipe:ioctl(Pid, snapshot)}}),
    receive
       {Tx, _} ->
          ok
    after ?CONFIG_TIMEOUT_REQ ->
-      ?ERROR("ambit [vnode]: sync recovery timeout ~p", [Peer])
+      ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
    end.
-
-
-

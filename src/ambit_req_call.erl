@@ -81,17 +81,16 @@ cast(Vnode, Key, Req, _Opts) ->
 unit({error, Reason}) ->
    {0, {error, [Reason]}};
 
-unit(Value) ->
-   {erlang:phash2(Value), Value}.
-
+unit({ok, #entity{val = Value}=Entity}) ->
+   {erlang:phash2(Value), {ok, Entity}}.
 
 %%
 %%
 join({error, A}, {error, B}) ->
    {error, lists:usort(A ++ B)};
 
-join(_, Value) ->
-   Value.
+join({ok, #entity{val=Val, vsn=VsnA, vnode = VnodeA}}, {ok, #entity{val=Val, vsn=VsnB, vnode = VnodeB}=B}) ->
+   {ok, B#entity{vsn = uid:join(VsnB, VsnA), vnode = VnodeB ++ VnodeA}}.
 
 
 

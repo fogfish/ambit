@@ -51,6 +51,10 @@ free(_Reason, #{vnode := _Vnode}) ->
    ?DEBUG("ambit [echo]: ~p free with ~p", [_Vnode, _Reason]),
    ok.
 
+ioctl(snapshot, #{seq := Seq}) ->
+   Seq;
+ioctl({snapshot, Seq}, State) ->
+   State#{seq => Seq};
 ioctl(_, _) ->
    throw(not_implemented).
 

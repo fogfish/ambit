@@ -91,36 +91,38 @@ snapshot(State) ->
 %%
 -spec diff(ek:vnode(), binary(), ek:vnode()) -> ok.
 
-diff(Peer, Name, State) ->
+diff(Peer, Key, State) ->
    Addr    = ek:vnode(addr, State),
    %% (?) Why do we force node type to primary, it has to be either primary 
    %%     or handoff depends on the type
    Handoff = erlang:setelement(1, Peer, primary),
-   case ambit_actor:service(Addr, Name) of
-      %% service died during aae session
-      undefined ->
-         ok;      
+   ambit_actor:sync(pns:whereis(Addr, Key), Peer).
 
-      %% sync removed service
-      #entity{val = undefined} = Entity ->
-         ?DEBUG("ambit [aae]: (-) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {remove, Entity}),
-         receive
-            {Tx, _} ->
-               ok
-         after ?CONFIG_TIMEOUT_REQ ->
-               ok
-         end;
+   % case ambit_actor:service(Addr, Name) of
+   %    %% service died during aae session
+   %    undefined ->
+   %       ok;      
 
-      %% sync existed service
-      Entity ->
-         ?DEBUG("ambit [aae]: (+) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {create, Entity}),
-         receive
-            {Tx, _} ->
-               ok
-         after ?CONFIG_TIMEOUT_REQ ->
-               ok
-         end
-   end.
+   %    %% sync removed service
+   %    #entity{val = undefined} = Entity ->
+   %       ?DEBUG("ambit [aae]: (-) ~p", [Name]),
+   %       Tx = ambit_peer:cast(Handoff, {'$ambitz', free, Entity}),
+   %       receive
+   %          {Tx, _} ->
+   %             ok
+   %       after ?CONFIG_TIMEOUT_REQ ->
+   %             ok
+   %       end;
+
+   %    %% sync existed service
+   %    Entity ->
+   %       ?DEBUG("ambit [aae]: (+) ~p", [Name]),
+   %       Tx = ambit_peer:cast(Handoff, {'$ambitz', spawn, Entity}),
+   %       receive
+   %          {Tx, _} ->
+   %             ok
+   %       after ?CONFIG_TIMEOUT_REQ ->
+   %             ok
+   %       end
+   % end.
 

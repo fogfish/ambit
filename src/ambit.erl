@@ -52,13 +52,13 @@ behaviour_info(callbacks) ->
       %% return pid of actor process 
       %%
       %% -spec(process/2 :: (pid(), atom()) -> {ok, any()} | {error, any()}).
-      {process,   1}
+      % {process,   1}
 
       %%
       %% initiate actor handoff procedure
       %%
       %% -spec(handoff/2 :: (pid(), ek:vnode()) -> ok).
-     ,{handoff,   2}
+      {handoff,   2}
 
       %%
       %% initiate actor repair procedure

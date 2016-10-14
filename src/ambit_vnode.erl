@@ -78,8 +78,7 @@ ioctl(_, _) ->
 
 %%
 %%
-primary({Req, _} = Request, Pipe, #{spawn := Pid}=State)
- when ?is_spawn(Req) ->
+primary({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
    pipe:emit(Pipe, Pid, Request),
    {next_state, primary, State};
 
@@ -104,33 +103,8 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
    %%        handoff is only "create feature"
    Addr = ek:vnode(addr, Vnode),
    lists:foreach(
-      fun({Name, _Pid}) ->
-         case ambit_actor:service(Addr, Name) of
-            %% service died during transfer i/o
-            undefined ->
-               ok;
-
-            %% service is removed skip sync
-            #entity{val = undefined} ->
-               ok;
-
-            %% sync existed service
-            Entity ->
-               case lists:member(Peer, ambitz:entity(vnode, Entity)) of
-                  false ->
-                     ?NOTICE("ambit [vnode]: sync recovery ~p", [Peer]),
-                     Tx = ambit_peer:cast(Peer, {create, Entity}),
-                     receive
-                        {Tx, _} ->
-                           ok
-                     after ?CONFIG_TIMEOUT_REQ ->
-                        ?ERROR("ambit [vnode]: sync recovery timeout ~p", [Peer])
-                     end;
-                  true  ->
-                     ok
-               end,
-               ambit_actor:sync(Addr, Name, Peer)
-         end
+      fun({_Name, Pid}) ->
+         (catch ambit_actor:sync(Pid, Peer))
       end,
       pns:lookup(Addr, '_')
    ),
@@ -139,8 +113,7 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
 
 %%
 %%
-handoff({Req, _} = Request, Pipe, #{spawn := Pid}=State)
- when ?is_spawn(Req) ->
+handoff({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
    pipe:emit(Pipe, Pid, Request),
    {next_state, handoff, State};
 
@@ -181,13 +154,13 @@ suspend(transfer, _, #{vnode := Vnode, handoff := Handoff, stream := Stream}=Sta
       %% sync removed service
       #entity{val = undefined} = Entity ->
          ?DEBUG("ambit [vnode]: transfer (-) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {remove, Entity}),
+         Tx = ambit_peer:cast(Handoff, {'$ambitz', free, Entity}),
          {next_state, transfer, State#{tx => Tx}, 10000}; %% @todo: config
 
       %% sync existed service
       Entity ->
          ?DEBUG("ambit [vnode]: transfer (+) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {create, Entity}),
+         Tx = ambit_peer:cast(Handoff, {'$ambitz', spawn, Entity}),
          {next_state, transfer, State#{tx => Tx}, 10000}  %% @todo: config
    end;
 

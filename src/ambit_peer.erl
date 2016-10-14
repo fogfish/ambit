@@ -141,21 +141,22 @@ handle({cast, Vnode, Msg}, Pipe, #{node := Node}=State) ->
    end;
    
 
-handle({cast, Vnode, Key, ping}, Pipe, State) ->
-   spawn(
-      fun() ->
-         pipe:ack(Pipe, {ok, [ambit:whereis(Vnode, Key)]})
-      end
-   ),
-   {next_state, handle, State};
+% handle({cast, Vnode, Key, ping}, Pipe, State) ->
+%    spawn(
+%       fun() ->
+%          pipe:ack(Pipe, {ok, [ambit:whereis(Vnode, Key)]})
+%       end
+%    ),
+%    {next_state, handle, State};
 
 handle({cast, Vnode, Key, Msg}, Pipe, State) ->
    spawn(
       fun() ->
-         case ambit:whereis(Vnode, Key) of
+         case pns:whereis(ek:vnode(addr, Vnode), Key) of
             undefined ->
                pipe:ack(Pipe, {error, noroute});
             Pid       ->
+               %% @todo: emit
                pipe:ack(Pipe, pipe:call(Pid, Msg))
          end
       end

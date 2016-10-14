@@ -58,12 +58,12 @@ ioctl(_, _) ->
 
 %%
 %%
-handle({create, #entity{key = Key}=Entity}, Pipe, Vnode) ->
+handle({'$ambitz', spawn, #entity{key = Key}=Entity}, Pipe, Vnode) ->
    Addr = ek:vnode(addr, Vnode),
    case pts:ensure(Addr, Key, [Vnode]) of
       {ok,  _} ->
          pipe:a(Pipe, 
-            pts:call(Addr, Key, {create, Entity})
+            pts:call(Addr, Key, {'$ambitz', spawn, Entity})
          ),
          {next_state, handle, Vnode};
       {error, _} = Error ->
@@ -71,9 +71,9 @@ handle({create, #entity{key = Key}=Entity}, Pipe, Vnode) ->
          {next_state, handle, Vnode}
    end;
    
-handle({remove, #entity{key = Key}=Entity}, Pipe, Vnode) ->
+handle({'$ambitz', free, #entity{key = Key}=Entity}, Pipe, Vnode) ->
    Addr = ek:vnode(addr, Vnode),
-   case pts:call(Addr, Key, {remove, Entity}) of
+   case pts:call(Addr, Key, {'$ambitz', free, Entity}) of
       %% not found is not a critical error, ping back entity
       {error, not_found} ->
          pipe:a(Pipe, {ok, Entity}),
@@ -83,9 +83,9 @@ handle({remove, #entity{key = Key}=Entity}, Pipe, Vnode) ->
          {next_state, handle, Vnode}
    end;
 
-handle({lookup, #entity{key = Key}=Entity}, Pipe, Vnode) ->
+handle({'$ambitz', lookup, #entity{key = Key}=Entity}, Pipe, Vnode) ->
    Addr = ek:vnode(addr, Vnode),
-   case pts:call(Addr, Key, {lookup, Entity}) of
+   case pts:call(Addr, Key, {'$ambitz', lookup, Entity}) of
       %% not found is not a critical error, ping back entity
       {error, not_found} ->
          pipe:a(Pipe, {ok, Entity}),
@@ -95,18 +95,18 @@ handle({lookup, #entity{key = Key}=Entity}, Pipe, Vnode) ->
          {next_state, handle, Vnode}
    end;
 
-handle({process, #entity{key = Key}=Entity}, Pipe, Vnode) ->
+handle({'$ambitz', whereis, #entity{key = Key}=Entity}, Pipe, Vnode) ->
    Addr   = ek:vnode(addr, Vnode),
-   Result = pts:call(Addr, Key, {process, Entity}),
+   Result = pts:call(Addr, Key, {'$ambitz', whereis, Entity}),
    pipe:a(Pipe, Result),
    {next_state, handle, Vnode};
 
-handle({whereis, #entity{key = Key}}, Pipe, Vnode) ->
-   Addr = ek:vnode(addr, Vnode),
-   pipe:a(Pipe, 
-      pns:whereis(ambit, {Addr, Key})
-   ),
-   {next_state, handle, Vnode};
+% handle({whereis, #entity{key = Key}}, Pipe, Vnode) ->
+%    Addr = ek:vnode(addr, Vnode),
+%    pipe:a(Pipe, 
+%       pns:whereis(ambit, {Addr, Key})
+%    ),
+%    {next_state, handle, Vnode};
 
 handle(_, _Tx, Vnode) ->
    {next_state, handle, Vnode}.

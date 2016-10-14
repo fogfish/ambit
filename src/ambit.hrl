@@ -44,7 +44,7 @@
 %% heap of actor processes
 -define(HEAP_ACTOR, [
    {keylen,      inf}
-  ,{supervisor,  ambit_actor_sup}
+  ,{entity,      ambit_actor}
   ,{factory,     temporary}
 ]).
 

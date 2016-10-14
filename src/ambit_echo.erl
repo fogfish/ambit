@@ -45,10 +45,10 @@ start_link(Vnode) ->
 init([Vnode]) ->
    ?DEBUG("ambit [echo]: init ~p", [Vnode]),
    erlang:process_flag(trap_exit, true),
-   {ok, handle, Vnode}.
+   {ok, handle, #{vnode => Vnode, seq => 0}}.
 
-free(_, Vnode) ->
-   ?DEBUG("ambit [echo]: free ~p", [Vnode]),
+free(_Reason, #{vnode := _Vnode}) ->
+   ?DEBUG("ambit [echo]: ~p free with ~p", [_Vnode, _Reason]),
    ok.
 
 ioctl(_, _) ->
@@ -82,8 +82,8 @@ handle({handoff, Vnode}, Tx, {handoff, _, _, _}=State) ->
    pipe:ack(Tx, ok),
    {next_state, handle, State};
 
-handle(Msg, Tx, State) ->
-   pipe:ack(Tx, Msg),
-   {next_state, handle, State}.
+handle(Msg, Tx, #{seq := Seq} = State) ->
+   pipe:ack(Tx, Seq + 1),
+   {next_state, handle, State#{seq => Seq + 1}}.
 
 

@@ -78,8 +78,10 @@ ioctl(_, _) ->
 
 %%
 %%
-primary({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
+primary({'$ambitz', _, #entity{key = Key}} = Request, Pipe, #{vnode := Vnode}=State) ->
+   Pid = ambit_actor:spawn(Vnode, Key),
    pipe:emit(Pipe, Pid, Request),
+   % pipe:emit(Pipe, Pid, Request),
    {next_state, primary, State};
 
 primary({aae, Req}, Pipe, #{aae := Pid}=State) ->
@@ -104,7 +106,7 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
    Addr = ek:vnode(addr, Vnode),
    lists:foreach(
       fun({_Name, Pid}) ->
-         (catch ambit_actor:sync(Pid, Peer))
+         (catch ambit_actor_bridge:sync(Pid, Peer))
       end,
       pns:lookup(Addr, '_')
    ),
@@ -113,8 +115,11 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
 
 %%
 %%
-handoff({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
+handoff({'$ambitz', _, #entity{key = Key}} = Request, Pipe, #{vnode := Vnode}=State) ->
+   Pid = ambit_actor:spawn(Vnode, Key),
    pipe:emit(Pipe, Pid, Request),
+% handoff({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
+%    pipe:emit(Pipe, Pid, Request),
    {next_state, handoff, State};
 
 handoff({aae, Req}, Pipe, #{aae := Pid}=State) ->
@@ -145,7 +150,7 @@ suspend(transfer, _, #{vnode := _Vnode, stream := {}}=State) ->
 
 suspend(transfer, _, #{vnode := Vnode, handoff := Handoff, stream := Stream}=State) ->
    {Name, _Pid} = stream:head(Stream),
-   case ambit_actor:service(ek:vnode(addr, Vnode), Name) of
+   case ambit_actor_bridge:service(ek:vnode(addr, Vnode), Name) of
       %% service died during transfer i/o
       undefined ->
          erlang:send(self(), transfer),
@@ -174,7 +179,7 @@ transfer({Tx, _Result}, _, #{tx := Tx, vnode := Vnode, handoff := Handoff, strea
    {Name, _Pid} = stream:head(Stream),
    %% @todo: make asynchronous handoff with long-term expectation of data transfer
    %%        handoff is only "create feature"
-   ambit_actor:handoff(ek:vnode(addr, Vnode), Name, Handoff),
+   ambit_actor_bridge:handoff(ek:vnode(addr, Vnode), Name, Handoff),
    erlang:send(self(), transfer),
    {next_state, suspend, State#{stream => stream:tail(Stream)}};
    

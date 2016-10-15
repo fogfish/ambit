@@ -42,11 +42,11 @@
 
 %%
 %% heap of actor processes
--define(HEAP_ACTOR, [
-   {keylen,      inf}
-  ,{entity,      ambit_actor}
-  ,{factory,     temporary}
-]).
+% -define(HEAP_ACTOR, [
+%    {keylen,      inf}
+%   ,{entity,      ambit_actor}
+%   ,{factory,     temporary}
+% ]).
 
 %%
 %% is request to spawn hand

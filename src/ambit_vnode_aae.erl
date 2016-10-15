@@ -96,7 +96,7 @@ diff(Peer, Key, State) ->
    %% (?) Why do we force node type to primary, it has to be either primary 
    %%     or handoff depends on the type
    Handoff = erlang:setelement(1, Peer, primary),
-   ambit_actor:sync(pns:whereis(Addr, Key), Peer),
+   ambit_actor_bridge:sync(pns:whereis(Addr, Key), Peer),
    ok.
 
    % case ambit_actor:service(Addr, Name) of

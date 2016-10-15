@@ -47,10 +47,10 @@ init([Addr, Vnode]) ->
             ?CHILD(worker, ambit_vnode_leader, [self(), Vnode])
 
             %% required before anything else
-           ,?CHILD(supervisor, pts, [Addr, ?HEAP_ACTOR])
+           ,?CHILD(supervisor, ambit_actor_sup, [Vnode]) %   pts, [Addr, ?HEAP_ACTOR])
            
             %% spawn service
-           ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
+            % ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
 
             %% @todo: make gossip configurable (enable/disable + timeouts)
             %% @todo: disable gossip (repair for hand-off)

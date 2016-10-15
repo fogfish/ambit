@@ -26,15 +26,17 @@ spawn(Vnode) ->
          Pid
    end.
 
+
 %%
-%% 
+%% send direct message to v-node
 -spec send(ek:vnode(), _) -> _.
 
 send(Vnode, Msg) ->
    pts:send(vnode, ek:vnode(addr, Vnode), Msg).
 
+
 %%
-%% apply function to each v-node
+%% apply function to each v-node descriptor
 -spec foreach( fun((ek:vnode()) -> ok) ) -> ok.
 
 foreach(Fun) ->

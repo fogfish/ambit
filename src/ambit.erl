@@ -32,6 +32,10 @@
 -export([behaviour_info/1]).
 -export([start/0]).
 -export([
+   cast/2, cast/3,
+   send/2, send/3,
+   call/2, call/3,
+
    whereis/2,
    successors/2,
    predecessors/2,
@@ -80,6 +84,61 @@ behaviour_info(_) ->
 start() ->
    applib:boot(?MODULE, code:where_is_file("app.config")).
  
+
+%%
+%% cast message to v-node using cluster fabric
+-spec cast(ek:vnode(), _) -> reference().
+
+cast(Vnode, Msg) ->
+   pipe:cast(ek:vnode(peer, Vnode), {request, Vnode, Msg}).
+
+
+%%
+%% cast message to actor using cluster fabric
+-spec cast(ek:vnode(), _, _) -> reference().
+
+cast(Vnode, Key, Msg) ->
+   pipe:cast(ek:vnode(peer, Vnode), {request, Vnode, Key, Msg}).
+
+
+%%
+%% send message to v-node using cluster fabric
+-spec send(ek:vnode(), _) -> ok.
+
+send(Vnode, Msg) ->
+   pipe:send(ek:vnode(peer, Vnode), {request, Vnode, Msg}).
+
+
+%%
+%% send message to actor using cluster fabric
+-spec send(ek:vnode(), _, _) -> reference().
+
+send(Vnode, Key, Msg) ->
+   pipe:send(ek:vnode(peer, Vnode), {request, Vnode, Key, Msg}).
+
+
+%%
+%% request v-node using cluster fabric
+-spec call(ek:vnode(), _) -> {ok, _} | {error, _}.
+
+call(Vnode, Msg) ->
+   pipe:call(ek:vnode(peer, Vnode), {request, Vnode, Msg}, ?CONFIG_TIMEOUT_REQ).
+
+
+%%
+%% send message to actor using cluster fabric
+-spec call(ek:vnode(), _, _) -> {ok, _} | {error, _}.
+
+call(Vnode, Key, Msg) ->
+   pipe:call(ek:vnode(peer, Vnode), {request, Vnode, Key, Msg}, ?CONFIG_TIMEOUT_REQ).
+
+
+
+
+
+
+
+
 %%
 %% utility function to lookup service processes on local node
 %%  

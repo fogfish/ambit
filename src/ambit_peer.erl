@@ -91,10 +91,12 @@ i(Vnode) ->
 -spec cast(ek:vnode(), binary(), any()) -> reference().
 
 cast(Vnode, Msg) ->
-   pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Msg}).
+   ambit:cast(Vnode, Msg).
+   % pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Msg}).
 
 cast(Vnode, Key, Msg) ->
-   pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Key, Msg}).
+   ambit:cast(Vnode, Key, Msg).
+   % pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Key, Msg}).
 
 %%
 %% send message to vnode (or actor)
@@ -102,10 +104,12 @@ cast(Vnode, Key, Msg) ->
 -spec send(ek:vnode(), binary(), any()) -> ok.
 
 send(Vnode, Msg) ->
-   pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Msg}).
+   ambit:send(Vnode, Msg).
+   % pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Msg}).
 
 send(Vnode, Key, Msg) ->
-   pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Key, Msg}).
+   ambit:send(Vnode, Key, Msg).
+   % pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Key, Msg}).
 
 
 %%%----------------------------------------------------------------------------   
@@ -129,69 +133,47 @@ handle({i, Vnode}, Pipe, State) ->
    {next_state, handle, State};
 
 %%
-%%
-handle({cast, Vnode, Msg}, Pipe, State) ->
+%% pipe message
+handle({request, Vnode, Msg}, Pipe, State) ->
    Pid = ambit_vnode:spawn(Vnode),
    pipe:emit(Pipe, Pid, Msg),
    {next_state, handle, State};
-   % case  of
-   %    {ok,  Pid} ->
-         
-         
-   %    {error, _} = Error ->
-   %       pipe:a(Pipe, Error),
-   %       {next_state, handle, State}
-   % end;
+
+
+handle({request, Vnode, Key, Msg}, Pipe, State) ->
+   spawn(
+      fun() ->
+         pipe:ack(Pipe, ambit_actor:call(Vnode, Key, Msg))
+      end
+   ),
+   {next_state, handle, State};
+
+%%
+%%
+% handle({send, Vnode, Msg}, Pipe, State) ->
+%    Pid = ambit_vnode:spawn(Vnode),
+%    pipe:emit(Pipe, Pid, Msg),
+%    {next_state, handle, State};
+%    % case ensure(Node, Vnode) of
+%    %    {ok,  Pid} ->
+%    %    {error, _} = Error ->
+%    %       pipe:a(Pipe, Error),
+%    %       {next_state, handle, State}
+%    % end;
    
 
-% handle({cast, Vnode, Key, ping}, Pipe, State) ->
+% handle({send, Vnode, Key, Msg}, _Pipe, State) ->
 %    spawn(
 %       fun() ->
-%          pipe:ack(Pipe, {ok, [ambit:whereis(Vnode, Key)]})
+%          case ambit:whereis(Vnode, Key) of
+%             undefined ->
+%                ok;
+%             Pid       ->
+%                pipe:send(Pid, Msg)
+%          end
 %       end
 %    ),
 %    {next_state, handle, State};
-
-handle({cast, Vnode, Key, Msg}, Pipe, State) ->
-   spawn(
-      fun() ->
-         case pns:whereis(ek:vnode(addr, Vnode), Key) of
-            undefined ->
-               pipe:ack(Pipe, {error, noroute});
-            Pid       ->
-               %% @todo: emit
-               pipe:ack(Pipe, pipe:call(Pid, Msg))
-         end
-      end
-   ),
-   {next_state, handle, State};
-
-%%
-%%
-handle({send, Vnode, Msg}, Pipe, State) ->
-   Pid = ambit_vnode:spawn(Vnode),
-   pipe:emit(Pipe, Pid, Msg),
-   {next_state, handle, State};
-   % case ensure(Node, Vnode) of
-   %    {ok,  Pid} ->
-   %    {error, _} = Error ->
-   %       pipe:a(Pipe, Error),
-   %       {next_state, handle, State}
-   % end;
-   
-
-handle({send, Vnode, Key, Msg}, _Pipe, State) ->
-   spawn(
-      fun() ->
-         case ambit:whereis(Vnode, Key) of
-            undefined ->
-               ok;
-            Pid       ->
-               pipe:send(Pid, Msg)
-         end
-      end
-   ),
-   {next_state, handle, State};
 
 %%
 %%

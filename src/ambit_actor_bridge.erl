@@ -198,6 +198,7 @@ accept(accept, call, Entity0, State0) ->
    end;
 
 accept(accept, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
+   %% @todo: snapshot conflict resolution
    case pipe:ioctl(Pid, {snapshot, Snap}) of
       {error,   _} = Error ->
          {Error, State0};

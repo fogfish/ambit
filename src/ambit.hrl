@@ -34,11 +34,11 @@
 
 %%
 %% heap of vnode processes
--define(HEAP_VNODE, [
-   {keylen,      inf}
-  ,{supervisor,  ambit_vnode_sup}
-  ,{factory,     transient}
-]).
+% -define(HEAP_VNODE, [
+%    {keylen,      inf}
+%   ,{supervisor,  ambit_vnode_sup}
+%   ,{factory,     transient}
+% ]).
 
 %%
 %% heap of actor processes

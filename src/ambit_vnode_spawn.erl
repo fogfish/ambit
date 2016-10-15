@@ -71,19 +71,6 @@ handle({'$ambitz', spawn, #entity{key = Key}=Entity}, Pipe, Vnode) ->
          {next_state, handle, Vnode}
    end;
 
-% handle({'$ambitz', snapshot, #entity{key = Key}=Entity}, Pipe, Vnode) ->
-%    Addr = ek:vnode(addr, Vnode),
-%    case pts:ensure(Addr, Key, [Vnode]) of
-%       {ok,  _} ->
-%          pipe:a(Pipe, 
-%             pts:call(Addr, Key, {'$ambitz', snapshot, Entity})
-%          ),
-%          {next_state, handle, Vnode};
-%       {error, _} = Error ->
-%          pipe:a(Pipe, Error),
-%          {next_state, handle, Vnode}
-%    end;
-
 handle({'$ambitz', free, #entity{key = Key}=Entity}, Pipe, Vnode) ->
    Addr = ek:vnode(addr, Vnode),
    case pts:call(Addr, Key, {'$ambitz', free, Entity}) of

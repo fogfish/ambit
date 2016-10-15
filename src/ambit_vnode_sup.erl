@@ -44,7 +44,7 @@ init([Addr, Vnode]) ->
          {one_for_all, 0, 1},
          [
             %%
-            ?CHILD(worker, ambit_vnode, [self(), Vnode])
+            ?CHILD(worker, ambit_vnode_leader, [self(), Vnode])
 
             %% required before anything else
            ,?CHILD(supervisor, pts, [Addr, ?HEAP_ACTOR])

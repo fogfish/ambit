@@ -132,8 +132,9 @@ handle({'EXIT', _, Reason}, _Pipe, State) ->
 %          pipe:ack(Tx, ok),
 %          {next_state, handle, State}
 %    end;
-handle({handoff, _}, Pipe, State) ->
-   pipe:ack(Pipe, ok),
+handle({handoff, Peer}, Pipe, State) ->
+   % pipe:ack(Pipe, ok),
+   pipe:ack(Pipe, syncwith(Peer, State)),
    {next_state, handle, State};
 
 % handle({sync, Peer}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}}}=State) ->
@@ -196,8 +197,7 @@ accept(accept, call, Entity0, State0) ->
          {{ok, Entity1#entity{val = Value}}, State1#{entity => Entity1}}
    end;
 
-accept(_, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
-   io:format("==> snap ~p~n", [Snap]),
+accept(accept, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
    case pipe:ioctl(Pid, {snapshot, Snap}) of
       {error,   _} = Error ->
          {Error, State0};
@@ -205,11 +205,10 @@ accept(_, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
          Entity1 = entity(Entity0, State0),
          {{ok, Entity1}, State0#{entity => Entity1}}
    end;
-
    
 accept(skip, _Msg, _EntityB, #{entity := #entity{key =_Key} = EntityA} = State) ->
    ?DEBUG("ambit [actor]: ~p skips ~p", [_Key, _Msg]),
-   {{ok, EntityA}, State};   
+   {{ok, EntityA}, State};
 
 accept(conflict, _Msg, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
    % @todo: conflict resolution
@@ -331,10 +330,10 @@ discover(_, #{entity := Entity}) ->
 %%
 descend(#entity{vsn = VsnA}, #entity{vsn = VsnB}) ->
    case {uid:descend(VsnA, VsnB), uid:descend(VsnB, VsnA)} of
-      % b -> a : skip request 
-      {true, _} -> skip;
       % a -> b : accept request 
       {_, true} -> accept;
+      % b -> a : skip request 
+      {true, _} -> skip;
       % conflict
       {_,    _} -> conflict 
    end.
@@ -483,19 +482,29 @@ syncwith(Peer, #{entity := #entity{key = Key} = Entity, actor := Pid}) ->
    ?NOTICE("ambit [actor]: sync (+) ~p with ~p", [Key, Peer]),
    Tx = ambit_peer:cast(Peer, {'$ambitz', spawn, Entity}),
    receive
-      {Tx, {ok, En}} ->
-         syncwith1(Peer, Pid, En),
+      {Tx, _} ->
+         syncwith1(Peer, Pid, Entity),
          ok
    after ?CONFIG_TIMEOUT_REQ ->
       ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
    end.
 
 syncwith1(Peer, Pid, #entity{key = Key} = Entity) ->
-   io:format("======> ssssksk ~p ~p~n", [Peer, Key]),
-   Tx = ambit_peer:cast(Peer, Key, {'$ambitz', snapshot, Entity#entity{val = pipe:ioctl(Pid, snapshot)}}),
-   receive
-      {Tx, _} ->
-         ok
-   after ?CONFIG_TIMEOUT_REQ ->
-      ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
+   try
+      %% snapshot feature might not be supported by actor
+      case pipe:ioctl(Pid, snapshot) of
+         undefined ->
+            ok;
+         Snapshot ->
+            Tx = ambit_peer:cast(Peer, Key, {'$ambitz', snapshot, Entity#entity{val = Snapshot}}),
+            receive
+               {Tx, _} ->
+                  ok
+            after ?CONFIG_TIMEOUT_REQ ->
+               ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
+            end
+      end
+   catch _:_ ->
+      ok
    end.
+

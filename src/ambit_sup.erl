@@ -51,7 +51,8 @@ init([]) ->
 
             %%
             %% vnode management pool
-           ,?CHILD(supervisor, vnode, pts, [vnode, ?HEAP_VNODE])
+           % ,?CHILD(supervisor, vnode, pts, [vnode, ?HEAP_VNODE])
+           ,?CHILD(supervisor, ambit_ring_sup)
 
             %%
             %% peer manager

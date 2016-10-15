@@ -1,200 +1,79 @@
-%%
-%%   Copyright 2014 Dmitry Kolesnikov, All Rights Reserved
-%%
-%%   Licensed under the Apache License, Version 2.0 (the "License");
-%%   you may not use this file except in compliance with the License.
-%%   You may obtain a copy of the License at
-%%
-%%       http://www.apache.org/licenses/LICENSE-2.0
-%%
-%%   Unless required by applicable law or agreed to in writing, software
-%%   distributed under the License is distributed on an "AS IS" BASIS,
-%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%%   See the License for the specific language governing permissions and
-%%   limitations under the License.
-%%
-%% @description
-%%   virtual node coordinator process
+%% @doc
+%%   vnode interface
 -module(ambit_vnode).
--behaviour(pipe).
-
 -include("ambit.hrl").
--include_lib("ambitz/include/ambitz.hrl").
 
 -export([
-   start_link/2
-  ,init/1
-  ,free/2
-  ,ioctl/2
-  ,primary/3
-  ,handoff/3
-  ,suspend/3   %% -> offline
-  ,transfer/3
+   spawn/1,
+   send/2,
+
+   foreach/1,
+   handoff/2
 ]).
 
-%%%----------------------------------------------------------------------------   
-%%%
-%%% Factory
-%%%
-%%%----------------------------------------------------------------------------   
-
 %%
-%%
-start_link(Sup, Vnode) ->
-   pipe:start_link(?MODULE, [Sup, Vnode], []).
+%% spawn v-node
+-spec spawn(ek:vnode()) -> pid().
 
-init([Sup, Vnode]) ->
-   ?DEBUG("ambit [vnode]: init ~p", [Vnode]),
-   ok = pns:register(vnode, ek:vnode(addr, Vnode), self()),
-   {ok, ek:vnode(type, Vnode), 
-      #{
-         vnode => Vnode,
-         sup   => Sup   
-      }
-   }.
-
-%%
-%%
-free(_Reason, #{sup := Sup, vnode := Vnode}) ->
-   ?DEBUG("ambit [vnode]: free ~p ~p", [Vnode, _Reason]),
-	ok = pns:unregister(vnode, ek:vnode(addr, Vnode)),
-   supervisor:terminate_child(pts:i(factory, vnode), Sup),
-   ok.
-
-ioctl(vnode, #{vnode := Vnode}) ->
-   Vnode;
-ioctl({spawn, Pid}, State) ->
-   State#{spawn => Pid};
-ioctl({aae, Pid}, State) ->
-   State#{aae => Pid};
-ioctl(_, _) ->
-   throw(not_implemented).
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% pipe
-%%%
-%%%----------------------------------------------------------------------------   
-
-%%
-%%
-primary({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
-   pipe:emit(Pipe, Pid, Request),
-   {next_state, primary, State};
-
-primary({aae, Req}, Pipe, #{aae := Pid}=State) ->
-   pipe:emit(Pipe, Pid, Req),
-   {next_state, primary, State};
-
-primary({handoff, Peer}, _,  #{vnode := Vnode}=State) ->
-   ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
-   erlang:send(self(), transfer),
-   {next_state, suspend, 
-      State#{
-         handoff => Peer,
-         stream  => stream:build(pns:lookup(ek:vnode(addr, Vnode), '_'))
-      }
-   };
-
-primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
-   ?NOTICE("ambit [vnode]: sync ~p with ~p", [Vnode, Peer]),
-   %% @todo: sync requires aae + async sync (vs explicit recovery)
-   %% @todo: make asynchronous handoff with long-term expectation of data transfer
-   %%        handoff is only "create feature"
+spawn(Vnode) ->
    Addr = ek:vnode(addr, Vnode),
-   lists:foreach(
-      fun({_Name, Pid}) ->
-         (catch ambit_actor:sync(Pid, Peer))
-      end,
-      pns:lookup(Addr, '_')
-   ),
-   {next_state, primary, State}.
-
-
-%%
-%%
-handoff({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
-   pipe:emit(Pipe, Pid, Request),
-   {next_state, handoff, State};
-
-handoff({aae, Req}, Pipe, #{aae := Pid}=State) ->
-   pipe:emit(Pipe, Pid, Req),
-   {next_state, handoff, State};
-
-
-handoff({handoff, Peer}, _,  #{vnode := Vnode}=State) ->
-   ?NOTICE("ambit [vnode]: handoff ~p to ~p", [Vnode, Peer]),
-   erlang:send(self(), transfer),
-   {next_state, suspend, 
-      State#{
-         handoff => Peer,
-         stream  => stream:build(pns:lookup(ek:vnode(addr, Vnode), '_'))
-      }
-   };
-
-handoff({sync, _Peer}, _, State) ->
-   %% do nothing, hint db is not synchronized
-   {next_state, handoff, State}.
-
-
-%%
-%%
-suspend(transfer, _, #{vnode := _Vnode, stream := {}}=State) ->
-   ?NOTICE("ambit [vnode]: handoff ~p completed", [_Vnode]),
-   {stop, normal, State};
-
-suspend(transfer, _, #{vnode := Vnode, handoff := Handoff, stream := Stream}=State) ->
-   {Name, _Pid} = stream:head(Stream),
-   case ambit_actor:service(ek:vnode(addr, Vnode), Name) of
-      %% service died during transfer i/o
+   case pns:whereis(vnode, Addr) of
       undefined ->
-         erlang:send(self(), transfer),
-         {next_state, suspend, State#{stream => stream:tail(Stream)}};      
-
-      %% sync removed service
-      #entity{val = undefined} = Entity ->
-         ?DEBUG("ambit [vnode]: transfer (-) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {'$ambitz', free, Entity}),
-         {next_state, transfer, State#{tx => Tx}, 10000}; %% @todo: config
-
-      %% sync existed service
-      Entity ->
-         ?DEBUG("ambit [vnode]: transfer (+) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {'$ambitz', spawn, Entity}),
-         {next_state, transfer, State#{tx => Tx}, 10000}  %% @todo: config
-   end;
-
-suspend(_, _, State) ->
-   {next_state, suspend, State}.
+         ?DEBUG("ambit [vnode]: spawn ~p", [Vnode]),
+         {ok, _} = pts:ensure(vnode, Addr, [Vnode]),
+         pns:whereis(vnode, Addr);
+      Pid ->
+         Pid
+   end.
 
 %%
+%% 
+-spec send(ek:vnode(), _) -> _.
+
+send(Vnode, Msg) ->
+   pts:send(vnode, ek:vnode(addr, Vnode), Msg).
+
 %%
-transfer({Tx, _Result}, _, #{tx := Tx, vnode := Vnode, handoff := Handoff, stream := Stream}=State) ->
-   ?DEBUG("ambit [vnode]: transfer ~p", [_Result]),
-   {Name, _Pid} = stream:head(Stream),
-   %% @todo: make asynchronous handoff with long-term expectation of data transfer
-   %%        handoff is only "create feature"
-   ambit_actor:handoff(ek:vnode(addr, Vnode), Name, Handoff),
-   erlang:send(self(), transfer),
-   {next_state, suspend, State#{stream => stream:tail(Stream)}};
-   
-transfer(timeout, _, State) ->
-   erlang:send_after(1000, self(), transfer),
-   {next_state, suspend,  State};
+%% apply function to each v-node
+-spec foreach( fun((ek:vnode()) -> ok) ) -> ok.
 
-transfer(_, _, State) ->
-   {next_state, transfer, State}.
+foreach(Fun) ->
+   pts:foreach(
+      fun(_, Pid) -> 
+         Fun(pipe:ioctl(Pid, vnode))
+      end, 
+      vnode
+   ).
 
-   
-%%%----------------------------------------------------------------------------   
-%%%
-%%% private
-%%%
-%%%----------------------------------------------------------------------------   
+%%
+%% Each v-node holds key interval from ring. V-node is either
+%%  * primary (aka replica) permanently stores actual object  
+%%  * handoff (aka hints collection) temporary keeps history of changes to object  
+%% The change of cluster topology impacts on Vnode roles. We can define a following 
+%% relations between cluster peers depending on v-nodes they operate:
+%%  * undefined - given peer do not have relation v-node
+%%  * replica   - given peer holds replica(s) of v-node
+%%  * handoff   - given peer exclusively responsible for v-node 
+%%
+-spec handoff(node(), ek:vnode()) -> undefined | {replica, ek:vnode()} | {handoff, ek:vnode()}.
 
+handoff(Peer, Vnode) ->
+   Type = ek:vnode(type, Vnode),
+   Ring = ek:vnode(ring, Vnode),
+   Addr = ek:vnode(addr, Vnode),
+   Node = ek:vnode(node, Vnode),
+   Layout = ek:successors(Ring, Addr),
+   handoff(Type, Node =:= Peer, lists:keyfind(Peer, 4, Layout), lists:keyfind(Node, 4, Layout)).
 
-
-
-
+% peer is not part of v-node successor list
+handoff(      _, false, false,     _) -> undefined;
+% peer is responsible for v-node, handoff it
+handoff(primary, false, Vnode, false) -> {handoff, Vnode};
+% peer manages v-node replica 
+handoff(primary, false, Vnode,     _) -> {replica, Vnode};
+% peer manages v-node replica but v-node holds hints
+handoff(handoff, true,  Vnode,     _) -> {handoff, Vnode};
+% other
+handoff(handoff,    _,      _,     _) -> undefined.
 
 

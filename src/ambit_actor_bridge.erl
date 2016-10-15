@@ -231,7 +231,7 @@ create(#entity{val = {M, F, A}}, #{entity := #entity{vnode =[Vnode]}} = State) -
 %%
 remove(_Entity, #{actor := Pid} = State) ->
    erlang:exit(Pid, normal),
-   {ok, maps:remove(actor, State#entity{val = undefined})};
+   {ok, maps:remove(actor, State#{entity => #entity{val = undefined}})};
 remove(_Entity, State) ->
    {ok, State}.
 

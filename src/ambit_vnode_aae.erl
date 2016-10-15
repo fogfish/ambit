@@ -95,7 +95,7 @@ diff(Peer, Key, State) ->
    Addr    = ek:vnode(addr, State),
    %% (?) Why do we force node type to primary, it has to be either primary 
    %%     or handoff depends on the type
-   Handoff = erlang:setelement(1, Peer, primary),
+   % Handoff = erlang:setelement(1, Peer, primary),
    ambit_actor_bridge:sync(pns:whereis(Addr, Key), Peer),
    ok.
 

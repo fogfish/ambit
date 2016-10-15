@@ -35,10 +35,10 @@
 %%
 %%-----------------------------------------------------------------------------
 
-start_link(vnode, Addr, Vnode) ->
-   supervisor:start_link(?MODULE, [Addr, Vnode]).
+start_link(vnode, _Addr, Vnode) ->
+   supervisor:start_link(?MODULE, [Vnode]).
    
-init([Addr, Vnode]) ->
+init([Vnode]) ->
    {ok,
       {
          {one_for_all, 0, 1},
@@ -48,7 +48,7 @@ init([Addr, Vnode]) ->
 
             %% required before anything else
            ,?CHILD(supervisor, ambit_actor_sup, [Vnode]) %   pts, [Addr, ?HEAP_ACTOR])
-           
+ 
             %% spawn service
             % ,?CHILD(worker, ambit_vnode_spawn, [Vnode])
 

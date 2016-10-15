@@ -68,7 +68,7 @@ monitor(Vnode) ->
 %%
 %%
 cast(Vnode, _Key, Req, _Opts) ->
-   ambit_peer:cast(Vnode, Req).
+   ambit:cast(Vnode, _Key, Req).
 
 %%
 %%

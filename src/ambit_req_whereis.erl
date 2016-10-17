@@ -16,75 +16,76 @@
 %% @doc
 %%   ambit spawn request
 -module(ambit_req_whereis).
-% -behaviour(ambitz).
+-behaviour(ambitz).
 
-% -include("ambit.hrl").
-% -include_lib("ambitz/include/ambitz.hrl").
+-include("ambit.hrl").
+-include_lib("ambitz/include/ambitz.hrl").
 
-% %% api
-% -export([start_link/0]).
-% %% request behavior
-% -export([
-%    ensure/3,
-%    guid/1,
-%    monitor/1,
-%    cast/4,
-%    unit/1,
-%    join/2
-% ]).
+%% api
+-export([start_link/0]).
+%% request behavior
+-export([
+   ensure/3,
+   guid/1,
+   monitor/1,
+   cast/4,
+   unit/1,
+   join/2
+]).
 
-% %%%----------------------------------------------------------------------------   
-% %%%
-% %%% api
-% %%%
-% %%%----------------------------------------------------------------------------   
+%%%----------------------------------------------------------------------------   
+%%%
+%%% api
+%%%
+%%%----------------------------------------------------------------------------   
 
-% %%
-% %% 
-% start_link() ->
-%    ambitz:start_link(?MODULE, opts:val(pool, ?CONFIG_IO_POOL, ambit)).
+%%
+%% 
+start_link() ->
+   ambitz:start_link(?MODULE, opts:val(pool, ?CONFIG_IO_POOL, ambit)).
 
-% %%%----------------------------------------------------------------------------   
-% %%%
-% %%% request
-% %%%
-% %%%----------------------------------------------------------------------------   
+%%%----------------------------------------------------------------------------   
+%%%
+%%% request
+%%%
+%%%----------------------------------------------------------------------------   
 
-% %%
-% %%
-% ensure(_Peers, _Key, _Opts) ->
-%    ok.
+%%
+%%
+ensure(_Peers, _Key, _Opts) ->
+   ok.
 
-% %%
-% %% generate globally unique transaction id
-% guid(_) ->
-%    undefined.
+%%
+%% generate globally unique transaction id
+guid(_) ->
+   undefined.
 
-% %%
-% %%
-% monitor(Vnode) ->
-%    erlang:monitor(process, ek:vnode(peer, Vnode)).
+%%
+%%
+monitor(Vnode) ->
+   erlang:monitor(process, ek:vnode(peer, Vnode)).
 
-% %%
-% %%
-% cast(Vnode, Key, Req, _Opts) ->
-%    ambit:cast(Vnode, Key, Req).
+%%
+%%
+cast(Vnode, Key, Req, _Opts) ->
+   ambit:cast(Vnode, Key, Req).
 
-% %%
-% %%
-% unit({ok, #entity{val = _Value}=Entity}) ->
-%    {1, {ok, Entity}};
+%%
+%%
+unit({ok, #entity{val = _Value}=Entity}) ->
+   {1, {ok, Entity}};
 
-% unit({error, Reason}) ->
-%    {0, {error, [Reason]}}.
+unit({error, Reason}) ->
+   {0, {error, [Reason]}}.
 
-% %%
-% %%
-% join({ok, #entity{val=ValA, vsn=VsnA, vnode = VnodeA}}, {ok, #entity{val=ValB, vsn=VsnB, vnode = VnodeB}=B}) ->
-%    {ok, B#entity{val=ValB ++ ValA, vsn = uid:join(VsnB, VsnA), vnode = VnodeB ++ VnodeA}};
+%%
+%%
+join({ok, EntityA}, {ok, EntityB}) ->
+   Vnode = ambitz:vnode(EntityA) ++ ambitz:vnode(EntityB),
+   {ok, ambitz:vnode(Vnode, ambitz:join(EntityA, EntityB))};
 
-% join({error, A}, {error, B}) ->
-%    {error, lists:usort(A ++ B)}.
+join({error, A}, {error, B}) ->
+   {error, lists:usort(A ++ B)}.
 
 
 

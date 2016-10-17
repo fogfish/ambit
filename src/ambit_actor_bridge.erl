@@ -260,10 +260,13 @@ lookup(_, #{entity := Entity}) ->
 %%
 %%
 discover(_, #{entity := Entity, actor := Pid}) ->
-   {ok, Entity#entity{val = [Pid]}};
+   %% @todo: think about value copy
+   #entity{type = Type, val = Val} = ambitz:put(Pid, ambitz:new(gset, ambitz:key(Entity))),
+   {ok, Entity#entity{type = Type, val = Val}};
 
 discover(_, #{entity := Entity}) ->
-   {ok, Entity#entity{val = []}}.
+   #entity{type = Type, val = Val} = ambitz:new(gset, ambitz:key(Entity)),
+   {ok, Entity#entity{type = Type, val = Val}}.
 
 
 
@@ -490,7 +493,7 @@ syncwith(Peer, #{entity := #entity{key = Key} = Entity, actor := Pid}) ->
    % @todo: sync internal state
    ?NOTICE("ambit [actor]: sync (+) ~p with ~p", [Key, Peer]),
    ambit:call(Peer, {'$ambitz', spawn, Entity}),
-   syncwith1(Peer, Pid, Entity),
+   % syncwith1(Peer, Pid, Entity),
    ok.
    % Tx = ambit_peer:cast(Peer, {'$ambitz', spawn, Entity}),
    % receive

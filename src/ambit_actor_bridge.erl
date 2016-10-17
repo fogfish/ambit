@@ -55,7 +55,7 @@ init([Addr, Key, Vnode]) ->
    erlang:process_flag(trap_exit, true),
    {ok, handle, 
       #{
-         entity  => #entity{key = Key, vnode = [Vnode]}
+         entity  => ambitz:vnode([Vnode], ambitz:new(lww_register, Key))
       }
    }.
 
@@ -162,66 +162,72 @@ handle({sync, Peer}, Pipe, State) ->
 %%
 %%
 accept(Msg, EntityB, #{entity := EntityA} = State) ->
-   accept(descend(EntityA, EntityB), Msg, EntityB, State).
+   accept(
+      ambitz:descend(EntityA, EntityB),
+      ambitz:descend(EntityB, EntityA),
+      Msg, EntityB, State
+   ).
 
-accept(_, lookup, Entity, State) ->
+accept(_, _, lookup, Entity, State) ->
    {lookup(Entity, State), State};
 
-accept(_, whereis, Entity, State) ->
+accept(_, _, whereis, Entity, State) ->
    {discover(Entity, State), State};
 
-accept(accept, spawn, Entity0, State0) ->
-   case create(Entity0, State0) of
-      {ok, State1} ->
-         Entity1 = entity(Entity0, State1),
-         {{ok, Entity1}, State1#{entity => Entity1}};
+accept(true, false, spawn, EntityB, State0) ->
+   case create(EntityB, State0) of
+      {ok, #{entity := EntityA} = State1} ->
+         Entity = ambitz:join(EntityA, EntityB),
+         {{ok, Entity}, State1#{entity => Entity}};
       {error,   _} = Error ->
          {Error, State0}
    end;
 
-accept(accept, free, Entity0, State0) ->
-   case remove(Entity0, State0) of
-      {ok, State1} ->
-         Entity1 = entity(Entity0, State1),
-         {{ok, Entity1}, State1#{entity => Entity1}};
+accept(true, false, free, EntityB, State0) ->
+   case remove(EntityB, State0) of
+      {ok, #{entity := EntityA} = State1} ->
+         Entity = ambitz:join(EntityA, EntityB),
+         {{ok, Entity}, State1#{entity => Entity}};
       {error,   _} = Error ->
          {Error, State0}
    end;
 
-accept(accept, call, Entity0, State0) ->
-   case call(Entity0, State0) of
-      {error,   _} = Error ->
-         {Error, State0};
-      {Value, State1} ->
-         Entity1 = entity(Entity0, State1),
-         {{ok, Entity1#entity{val = Value}}, State1#{entity => Entity1}}
-   end;
+% accept(accept, call, Entity0, State0) ->
+%    case call(Entity0, State0) of
+%       {error,   _} = Error ->
+%          {Error, State0};
+%       {Value, State1} ->
+%          Entity1 = entity(Entity0, State1),
+%          {{ok, Entity1#entity{val = Value}}, State1#{entity => Entity1}}
+%    end;
 
-accept(accept, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
-   %% @todo: snapshot conflict resolution
-   case pipe:ioctl(Pid, {snapshot, Snap}) of
-      {error,   _} = Error ->
-         {Error, State0};
-      ok ->
-         Entity1 = entity(Entity0, State0),
-         {{ok, Entity1}, State0#{entity => Entity1}}
-   end;
+% accept(accept, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
+%    %% @todo: snapshot conflict resolution
+%    case pipe:ioctl(Pid, {snapshot, Snap}) of
+%       {error,   _} = Error ->
+%          {Error, State0};
+%       ok ->
+%          Entity1 = entity(Entity0, State0),
+%          {{ok, Entity1}, State0#{entity => Entity1}}
+%    end;
    
-accept(skip, _Msg, _EntityB, #{entity := #entity{key =_Key} = EntityA} = State) ->
+accept(_, _, _Msg, _EntityB, #{entity := #entity{key =_Key} = EntityA} = State) ->
    ?DEBUG("ambit [actor]: ~p skips ~p", [_Key, _Msg]),
-   {{ok, EntityA}, State};
+   {{ok, EntityA}, State}.
 
-accept(conflict, _Msg, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
-   % @todo: conflict resolution
-   ?DEBUG("ambit [actor]: ~p ~p conflict with ~p", [_Key, _Msg, uid:diff(_VsnA, _VsnB)]),
-   {{error, conflict}, State}.
+% accept(conflict, _Msg, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
+%    % @todo: conflict resolution
+%    ?DEBUG("ambit [actor]: ~p ~p conflict with ~p", [_Key, _Msg, uid:diff(_VsnA, _VsnB)]),
+%    {{error, conflict}, State}.
 
 %%
 %%
 create(_Entity, #{actor := _} = State) ->
+   %% @todo: re-spawn actor if signature different
    {ok, State};
-create(#entity{val = {M, F, A}}, #{entity := #entity{vnode =[Vnode]}} = State) ->
-   case erlang:apply(M, F, [Vnode|A]) of
+create(EntityB, #{entity := EntityA} = State) ->
+   {M, F, A} = ambitz:get(EntityB),
+   case erlang:apply(M, F, [ambitz:vnode(EntityA)|A]) of
       {ok, Pid} ->
          {ok, State#{actor => Pid}};
       {error, _} = Error ->
@@ -329,8 +335,8 @@ discover(_, #{entity := Entity}) ->
 
 %%
 %%
-descend(#entity{vsn = VsnA}, #entity{vsn = VsnB}) ->
-   case {uid:descend(VsnA, VsnB), uid:descend(VsnB, VsnA)} of
+descend(EntityA, EntityB) ->
+   case {ambitz:descend(EntityA, EntityB), ambitz:descend(EntityB, EntityA)} of
       % a -> b : accept request 
       {_, true} -> accept;
       % b -> a : skip request 
@@ -454,15 +460,15 @@ descend(#entity{vsn = VsnA}, #entity{vsn = VsnB}) ->
 
 %%
 %%
-entity(#entity{vsn = VsnA, val = {_, _, _}} = Entity0, #{entity := #entity{vsn = VsnB, vnode = Vnode}}) ->
-   Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB), vnode = Vnode},
-   ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
-   Entity1;
+% entity(#entity{vsn = VsnA, val = {_, _, _}} = Entity0, #{entity := #entity{vsn = VsnB, vnode = Vnode}}) ->
+%    Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB), vnode = Vnode},
+%    ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
+%    Entity1;
 
-entity(#entity{vsn = VsnB}, #{entity := #entity{vsn = VsnA} = Entity0}) ->
-   Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB)},
-   ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
-   Entity1.
+% entity(#entity{vsn = VsnB}, #{entity := #entity{vsn = VsnA} = Entity0}) ->
+%    Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB)},
+%    ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
+%    Entity1.
 
 
 

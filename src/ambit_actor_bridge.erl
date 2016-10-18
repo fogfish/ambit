@@ -161,6 +161,9 @@ handle({sync, Peer}, Pipe, State) ->
 
 %%
 %%
+accept({ioctl, Lens}, Entity, State) ->
+   {ioctl(Lens, Entity, State), State};
+
 accept(Msg, EntityB, #{entity := EntityA} = State) ->
    accept(
       ambitz:descend(EntityA, EntityB),
@@ -238,18 +241,36 @@ create(EntityB, #{entity := EntityA} = State) ->
 %%
 remove(_Entity, #{actor := Pid} = State) ->
    erlang:exit(Pid, normal),
-   {ok, maps:remove(actor, State#{entity => #entity{val = undefined}})};
+   {ok, maps:remove(actor, State)};
 remove(_Entity, State) ->
    {ok, State}.
 
 %%
 %%
-call(#entity{val = Msg}, #{actor := Pid} = State) ->
-   %% @todo: handle timeout
-   {pipe:call(Pid, Msg, 60000), State};
+ioctl(Lens, Entity0, #{actor := Pid, entity := Entity}) ->
+   %% @todo: preserve list of Lenses to gset and use it sync/handoff
+   Entity1 = pipe:ioctl(Pid, Lens),
+   case {ambitz:descend(Entity0, Entity1), ambitz:descend(Entity1, Entity0)} of
+      {false, true} ->
+         Entity2 = ambitz:join(Entity1, Entity0),
+         pipe:ioctl(Pid, {Lens, Entity2}),
+         {ok, ambitz:vnode(ambitz:vnode(Entity), Entity2)};
 
-call(_, State) ->
-   {{error, no_actor}, State}.
+      _ ->
+         {ok, ambitz:vnode(ambitz:vnode(Entity), Entity1)}
+   end;
+
+ioctl(_Lens, _Entity, _) ->
+   {error, no_actor}.
+
+% %%
+% %%
+% call(#entity{val = Msg}, #{actor := Pid} = State) ->
+%    %% @todo: handle timeout
+%    {pipe:call(Pid, Msg, 60000), State};
+
+% call(_, State) ->
+%    {{error, no_actor}, State}.
 
 
 %%
@@ -474,27 +495,14 @@ descend(EntityA, EntityB) ->
 %    Entity1.
 
 
-
 %%
 %%
-syncwith(Peer, #{entity := #entity{key = Key, val = undefined} = Entity}) ->
-   ?DEBUG("ambit [actor]: sync (-) ~p with ~p", [Key, Peer]),
-   ambit:call(Peer, {'$ambitz', free, Entity}),
-   ok;
-   % Tx = ambit_peer:cast(Peer, {'$ambitz', free, Entity}),
-   % receive
-   %    {Tx, _} ->
-   %       ok
-   % after ?CONFIG_TIMEOUT_REQ ->
-   %       ok
-   % end;
-
 syncwith(Peer, #{entity := #entity{key = Key} = Entity, actor := Pid}) ->
    % @todo: sync internal state
    ?NOTICE("ambit [actor]: sync (+) ~p with ~p", [Key, Peer]),
    ambit:call(Peer, {'$ambitz', spawn, Entity}),
    % syncwith1(Peer, Pid, Entity),
-   ok.
+   ok;
    % Tx = ambit_peer:cast(Peer, {'$ambitz', spawn, Entity}),
    % receive
    %    {Tx, _} ->
@@ -503,6 +511,21 @@ syncwith(Peer, #{entity := #entity{key = Key} = Entity, actor := Pid}) ->
    % after ?CONFIG_TIMEOUT_REQ ->
    %    ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
    % end.
+
+syncwith(Peer, #{entity := #entity{key = Key} = Entity}) ->
+   ?DEBUG("ambit [actor]: sync (-) ~p with ~p", [Key, Peer]),
+   ambit:call(Peer, {'$ambitz', free, Entity}),
+   ok.
+   % Tx = ambit_peer:cast(Peer, {'$ambitz', free, Entity}),
+   % receive
+   %    {Tx, _} ->
+   %       ok
+   % after ?CONFIG_TIMEOUT_REQ ->
+   %       ok
+   % end;
+
+
+
 
 syncwith1(Peer, Pid, #entity{key = Key} = Entity) ->
    try

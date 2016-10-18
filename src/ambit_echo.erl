@@ -45,16 +45,26 @@ start_link(Vnode) ->
 init([Vnode]) ->
    ?DEBUG("ambit [echo]: init ~p", [Vnode]),
    erlang:process_flag(trap_exit, true),
-   {ok, handle, #{vnode => Vnode, seq => 0}}.
+   {ok, handle, 
+      #{
+         vnode => Vnode
+        ,seq   => ambitz:new(gcounter)
+        ,set   => ambitz:new(gset)
+      }
+   }.
 
 free(_Reason, #{vnode := _Vnode}) ->
    ?DEBUG("ambit [echo]: ~p free with ~p", [_Vnode, _Reason]),
    ok.
 
-ioctl(snapshot, #{seq := Seq}) ->
+ioctl(seq, #{seq := Seq}) ->
    Seq;
-ioctl({snapshot, Seq}, State) ->
+ioctl({seq, Seq}, State) ->
    State#{seq => Seq};
+ioctl(set, #{set := Set}) ->
+   Set;
+ioctl({set, Set}, State) ->
+   State#{set => Set};
 ioctl(_, _) ->
    throw(not_implemented).
 
@@ -84,10 +94,6 @@ handle({handoff, Vnode}, Tx, {primary, _, _, _}=State) ->
 handle({handoff, Vnode}, Tx, {handoff, _, _, _}=State) ->
    ?ERROR("ambit [echo]: hint gossip with ~p", [Vnode]),
    pipe:ack(Tx, ok),
-   {next_state, handle, State};
-
-handle(Msg, Tx, #{seq := Seq} = State) ->
-   pipe:ack(Tx, Seq + 1),
-   {next_state, handle, State#{seq => Seq + 1}}.
+   {next_state, handle, State}.
 
 

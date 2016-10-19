@@ -86,14 +86,32 @@ handoff(Root, Vnode) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-handle({handoff, Vnode}, Tx, {primary, _, _, _}=State) ->
+handle({handoff, Vnode}, Tx, #{vnode := {primary, _, _, _}} = State) ->
    ?ERROR("ambit [echo]: data transfer to ~p", [Vnode]),
    pipe:ack(Tx, ok),
    {next_state, handle, State};
 
-handle({handoff, Vnode}, Tx, {handoff, _, _, _}=State) ->
+handle({handoff, Vnode}, Tx, #{vnode := {handoff, _, _, _}} = State) ->
    ?ERROR("ambit [echo]: hint gossip with ~p", [Vnode]),
    pipe:ack(Tx, ok),
+   {next_state, handle, State};
+
+handle({put, seq, SeqA}, Tx, #{seq := SeqB} = State) ->
+   Seq = crdts:join(SeqA, SeqB),
+   pipe:ack(Tx, {ok, Seq}),
+   {next_state, handle, State#{seq => Seq}};
+
+handle({get, seq}, Tx, #{seq := Seq} = State) ->
+   pipe:ack(Tx, {ok, Seq}),
+   {next_state, handle, State};
+
+handle({put, set, SetA}, Tx, #{set := SetB} = State) ->
+   Set = crdts:join(SetA, SetB),
+   pipe:ack(Tx, {ok, Set}),
+   {next_state, handle, State#{set => Set}};
+
+handle({get, set}, Tx, #{set := Seq} = State) ->
+   pipe:ack(Tx, {ok, Seq}),
    {next_state, handle, State}.
 
 

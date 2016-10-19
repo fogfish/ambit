@@ -73,16 +73,19 @@ cast(Vnode, _Key, Req, _Opts) ->
 %%
 %%
 unit({ok, Entity}) ->
-   {erlang:phash2(ambitz:get(Entity)), {ok, Entity}};
+   {1, {ok, Entity}};
+   % {erlang:phash2(ambitz:get(Entity)), {ok, Entity}};
 
 unit({error, Reason}) ->
    {0, {error, [Reason]}}.
 
 %%
 %%
-join({ok, EntityA}, {ok, EntityB}) ->
-   Vnode = ambitz:vnode(EntityA) ++ ambitz:vnode(EntityB),
-   {ok, ambitz:vnode(Vnode, ambitz:join(EntityA, EntityB))};
+join({ok, #entity{vnode = VnodeA, val = A} = EntityA}, {ok, #entity{vnode = VnodeB, val = B}}) ->
+   {ok, EntityA#entity{vnode = VnodeA ++ VnodeB, val = crdts:join(A, B)}};
+% join({ok, EntityA}, {ok, EntityB}) ->
+%    Vnode = ambitz:vnode(EntityA) ++ ambitz:vnode(EntityB),
+%    {ok, ambitz:vnode(Vnode, ambitz:join(EntityA, EntityB))};
 
 join({error, A}, {error, B}) ->
    {error, lists:usort(A ++ B)}.

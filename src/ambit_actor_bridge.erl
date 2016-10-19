@@ -55,7 +55,8 @@ init([Addr, Key, Vnode]) ->
    erlang:process_flag(trap_exit, true),
    {ok, handle, 
       #{
-         entity  => ambitz:vnode([Vnode], ambitz:new(lww_register, Key))
+         entity  => #entity{key = Key, vnode = [Vnode]}
+% ambitz:vnode([Vnode], ambitz:new(lww_register, Key))
       }
    }.
 
@@ -161,26 +162,29 @@ handle({sync, Peer}, Pipe, State) ->
 
 %%
 %%
-accept({ioctl, Lens}, Entity, State) ->
-   {ioctl(Lens, Entity, State), State};
+accept({put, Lens}, Entity, State) ->
+   {put(Lens, Entity, State), State};
 
-accept(Msg, EntityB, #{entity := EntityA} = State) ->
-   accept(
-      ambitz:descend(EntityA, EntityB),
-      ambitz:descend(EntityB, EntityA),
-      Msg, EntityB, State
-   ).
+accept({get, Lens}, Entity, State) ->
+   {get(Lens, Entity, State), State};
 
-accept(_, _, lookup, Entity, State) ->
+accept(lookup, Entity, State) ->
    {lookup(Entity, State), State};
 
-accept(_, _, whereis, Entity, State) ->
+accept(whereis, Entity, State) ->
    {discover(Entity, State), State};
+
+accept(Msg, #entity{val = B} = EntityB, #{entity := #entity{val = A}} = State) ->
+   accept(
+      crdts:descend(A, B),
+      crdts:descend(B, A),
+      Msg, EntityB, State
+   ).
 
 accept(true, false, spawn, EntityB, State0) ->
    case create(EntityB, State0) of
       {ok, #{entity := EntityA} = State1} ->
-         Entity = ambitz:join(EntityA, EntityB),
+         Entity = join(EntityA, EntityB),
          {{ok, Entity}, State1#{entity => Entity}};
       {error,   _} = Error ->
          {Error, State0}
@@ -189,7 +193,7 @@ accept(true, false, spawn, EntityB, State0) ->
 accept(true, false, free, EntityB, State0) ->
    case remove(EntityB, State0) of
       {ok, #{entity := EntityA} = State1} ->
-         Entity = ambitz:join(EntityA, EntityB),
+         Entity = join(EntityA, EntityB),
          {{ok, Entity}, State1#{entity => Entity}};
       {error,   _} = Error ->
          {Error, State0}
@@ -223,14 +227,17 @@ accept(_, _, _Msg, _EntityB, #{entity := #entity{key =_Key} = EntityA} = State) 
 %    ?DEBUG("ambit [actor]: ~p ~p conflict with ~p", [_Key, _Msg, uid:diff(_VsnA, _VsnB)]),
 %    {{error, conflict}, State}.
 
+join(#entity{val = A} = EntityA, #entity{val = B}) ->
+   EntityA#entity{val = crdts:join(A, B)}.
+
 %%
 %%
 create(_Entity, #{actor := _} = State) ->
    %% @todo: re-spawn actor if signature different
    {ok, State};
-create(EntityB, #{entity := EntityA} = State) ->
-   {M, F, A} = ambitz:get(EntityB),
-   case erlang:apply(M, F, [ambitz:vnode(EntityA)|A]) of
+create(#entity{val = B}, #{entity := #entity{vnode = [Vnode]}} = State) ->
+   {M, F, A} = crdts:value(B),
+   case erlang:apply(M, F, [Vnode|A]) of
       {ok, Pid} ->
          {ok, State#{actor => Pid}};
       {error, _} = Error ->
@@ -247,21 +254,30 @@ remove(_Entity, State) ->
 
 %%
 %%
-ioctl(Lens, Entity0, #{actor := Pid, entity := Entity}) ->
-   %% @todo: preserve list of Lenses to gset and use it sync/handoff
-   Entity1 = pipe:ioctl(Pid, Lens),
-   case {ambitz:descend(Entity0, Entity1), ambitz:descend(Entity1, Entity0)} of
-      {false, true} ->
-         Entity2 = ambitz:join(Entity1, Entity0),
-         pipe:ioctl(Pid, {Lens, Entity2}),
-         {ok, ambitz:vnode(ambitz:vnode(Entity), Entity2)};
+put(Lens, #entity{val = A} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
+   {ok, B} = pipe:call(Pid, {put, Lens, A}),
+   {ok, Entity#entity{vnode = Vnode, val = B}}.
 
-      _ ->
-         {ok, ambitz:vnode(ambitz:vnode(Entity), Entity1)}
-   end;
+get(Lens, #entity{} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
+   {ok, B} = pipe:call(Pid, {get, Lens}),
+   {ok, Entity#entity{vnode = Vnode, val = B}}.
 
-ioctl(_Lens, _Entity, _) ->
-   {error, no_actor}.
+
+% ioctl(Lens, Entity0, #{actor := Pid, entity := Entity}) ->
+%    %% @todo: preserve list of Lenses to gset and use it sync/handoff
+%    Entity1 = pipe:ioctl(Pid, Lens),
+%    case {ambitz:descend(Entity0, Entity1), ambitz:descend(Entity1, Entity0)} of
+%       {false, true} ->
+%          Entity2 = ambitz:join(Entity1, Entity0),
+%          pipe:ioctl(Pid, {Lens, Entity2}),
+%          {ok, ambitz:vnode(ambitz:vnode(Entity), Entity2)};
+
+%       _ ->
+%          {ok, ambitz:vnode(ambitz:vnode(Entity), Entity1)}
+%    end;
+
+% ioctl(_Lens, _Entity, _) ->
+%    {error, no_actor}.
 
 % %%
 % %%
@@ -280,14 +296,16 @@ lookup(_, #{entity := Entity}) ->
 
 %%
 %%
-discover(_, #{entity := Entity, actor := Pid}) ->
-   %% @todo: think about value copy
-   #entity{type = Type, val = Val} = ambitz:put(Pid, ambitz:new(gset, ambitz:key(Entity))),
-   {ok, Entity#entity{type = Type, val = Val}};
+discover(#entity{val = Val} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
+   {ok, Entity#entity{vnode = Vnode, val = crdts:update(Pid, Val)}};
+   % %% @todo: think about value copy
+   % #entity{type = Type, val = Val} = ambitz:put(Pid, ambitz:new(gset, ambitz:key(Entity))),
+   % {ok, Entity#entity{type = Type, val = Val}};
 
-discover(_, #{entity := Entity}) ->
-   #entity{type = Type, val = Val} = ambitz:new(gset, ambitz:key(Entity)),
-   {ok, Entity#entity{type = Type, val = Val}}.
+discover(#entity{} = Entity, #{entity := #entity{vnode = Vnode}}) ->
+   {ok, Entity#entity{vnode = Vnode}}.
+   % #entity{type = Type, val = Val} = ambitz:new(gset, ambitz:key(Entity)),
+   % {ok, Entity#entity{type = Type, val = Val}}.
 
 
 

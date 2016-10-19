@@ -15,7 +15,7 @@
 %%
 %% @doc
 %%   ambit spawn transaction
--module(ambit_req_ioctl).
+-module(ambit_req_put).
 -behaviour(ambitz).
 
 -include("ambit.hrl").

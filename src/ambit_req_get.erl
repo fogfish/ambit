@@ -14,8 +14,8 @@
 %%   limitations under the License.
 %%
 %% @doc
-%%   ambit spawn request
--module(ambit_req_remove).
+%%   ambit spawn transaction
+-module(ambit_req_get).
 -behaviour(ambitz).
 
 -include("ambit.hrl").
@@ -63,12 +63,12 @@ guid(_) ->
 %%
 %%
 monitor(Vnode) ->
-   erlang:monitor(process, ek:vnode(peer, Vnode)).
+   erlang:monitor(process, ek:vnode(peer, Vnode)). 
 
 %%
-%%
+%% 
 cast(Vnode, _Key, Req, _Opts) ->
-   ambit:cast(Vnode, _Key, Req).
+   ambit:cast(Vnode, Req).
 
 %%
 %%
@@ -86,4 +86,7 @@ join({ok, EntityA}, {ok, EntityB}) ->
 
 join({error, A}, {error, B}) ->
    {error, lists:usort(A ++ B)}.
+
+
+
 

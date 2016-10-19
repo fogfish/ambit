@@ -43,11 +43,12 @@ init([]) ->
          [
             %%
             %% transaction pool(s) 
-            ?CHILD(worker, ambit_req_create)
-           ,?CHILD(worker, ambit_req_remove)
+            ?CHILD(worker, ambit_req_spawn)
+           ,?CHILD(worker, ambit_req_free)
            ,?CHILD(worker, ambit_req_lookup)
            ,?CHILD(worker, ambit_req_whereis)
-           ,?CHILD(worker, ambit_req_ioctl)
+           ,?CHILD(worker, ambit_req_put)
+           ,?CHILD(worker, ambit_req_get)
 
             %%
             %% vnode management pool

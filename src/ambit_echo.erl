@@ -48,8 +48,8 @@ init([Vnode]) ->
    {ok, handle, 
       #{
          vnode => Vnode
-        ,seq   => ambitz:new(gcounter)
-        ,set   => ambitz:new(gset)
+        ,seq   => crdts:new(gcounter)
+        ,set   => crdts:new(gsets)
       }
    }.
 
@@ -57,14 +57,14 @@ free(_Reason, #{vnode := _Vnode}) ->
    ?DEBUG("ambit [echo]: ~p free with ~p", [_Vnode, _Reason]),
    ok.
 
-ioctl(seq, #{seq := Seq}) ->
-   Seq;
-ioctl({seq, Seq}, State) ->
-   State#{seq => Seq};
-ioctl(set, #{set := Set}) ->
-   Set;
-ioctl({set, Set}, State) ->
-   State#{set => Set};
+% ioctl(seq, #{seq := Seq}) ->
+%    Seq;
+% ioctl({seq, Seq}, State) ->
+%    State#{seq => Seq};
+% ioctl(set, #{set := Set}) ->
+%    Set;
+% ioctl({set, Set}, State) ->
+%    State#{set => Set};
 ioctl(_, _) ->
    throw(not_implemented).
 

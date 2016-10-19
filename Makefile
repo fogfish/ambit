@@ -55,7 +55,7 @@ CTRUN   = \
    	{ok, Test} = file:consult(Spec), \
    	case lists:keyfind(node, 1, Test) of \
       	false -> ct:run_test([{spec, Spec}]); \
-         true  -> ct_master:run(Spec) \
+           _  -> ct_master:run(Spec) \
    	end, \
 		erlang:halt().
 

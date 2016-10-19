@@ -81,7 +81,6 @@ ioctl(_, _) ->
 primary({'$ambitz', _, #entity{key = Key}} = Request, Pipe, #{vnode := Vnode}=State) ->
    Pid = ambit_actor:spawn(Vnode, Key),
    pipe:emit(Pipe, Pid, Request),
-   % pipe:emit(Pipe, Pid, Request),
    {next_state, primary, State};
 
 primary({aae, Req}, Pipe, #{aae := Pid}=State) ->
@@ -118,8 +117,6 @@ primary({sync, Peer}, _, #{vnode := Vnode}=State) ->
 handoff({'$ambitz', _, #entity{key = Key}} = Request, Pipe, #{vnode := Vnode}=State) ->
    Pid = ambit_actor:spawn(Vnode, Key),
    pipe:emit(Pipe, Pid, Request),
-% handoff({'$ambitz', _, _} = Request, Pipe, #{spawn := Pid}=State) ->
-%    pipe:emit(Pipe, Pid, Request),
    {next_state, handoff, State};
 
 handoff({aae, Req}, Pipe, #{aae := Pid}=State) ->
@@ -150,7 +147,7 @@ suspend(transfer, _, #{vnode := _Vnode, stream := {}}=State) ->
 
 suspend(transfer, _, #{vnode := Vnode, handoff := Handoff, stream := Stream}=State) ->
    {Name, _Pid} = stream:head(Stream),
-   case ambit_actor_bridge:service(ek:vnode(addr, Vnode), Name) of
+   case ambit_actor:service(Vnode, Name) of
       %% service died during transfer i/o
       undefined ->
          erlang:send(self(), transfer),
@@ -159,13 +156,13 @@ suspend(transfer, _, #{vnode := Vnode, handoff := Handoff, stream := Stream}=Sta
       %% sync removed service
       #entity{val = undefined} = Entity ->
          ?DEBUG("ambit [vnode]: transfer (-) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {'$ambitz', free, Entity}),
+         Tx = ambit:cast(Handoff, {'$ambitz', free, Entity}),
          {next_state, transfer, State#{tx => Tx}, 10000}; %% @todo: config
 
       %% sync existed service
       Entity ->
          ?DEBUG("ambit [vnode]: transfer (+) ~p", [Name]),
-         Tx = ambit_peer:cast(Handoff, {'$ambitz', spawn, Entity}),
+         Tx = ambit:cast(Handoff, {'$ambitz', spawn, Entity}),
          {next_state, transfer, State#{tx => Tx}, 10000}  %% @todo: config
    end;
 

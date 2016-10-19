@@ -2,6 +2,7 @@
 %%    read-write io traffic
 -module(ambit_io_SUITE).
 -include_lib("common_test/include/ct.hrl").
+-include_lib("ambitz/include/ambitz.hrl").
 
 %% common test
 -export([
@@ -82,40 +83,27 @@ end_per_group(_, _Config) ->
 spawn(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   {ok, Entity} = ambitz:spawn(
-      ambitz:entity(service, {ambit_echo, start_link, []},
-         ambitz:entity(Key)  
-      ),
-      [{w, N}]
-   ),
-   {ambit_echo, _, _} = ambitz:entity(service, Entity).
+   {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
+   {ambit_echo, _, _} = crdts:value(Val).
 
 %%
 %%
 free(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   {ok, Entity1} = ambitz:spawn(
-      ambitz:entity(service, {ambit_echo, start_link, []}, 
-         ambitz:entity(Key)
-      ),
-      [{w, N}]
-   ),
-   {ok, Entity2} = ambitz:free(Entity1, [{w, N}]),
-   undefined = ambitz:entity(service, Entity2).
+   {ok, _} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
+   {ok, #entity{val = Val}} = ambitz:free(ambit, Key, [{w, N}]),
+   undefined = crdts:value(Val).
    
 %%
 %%
 ping(Config) -> 
    N   = opts:val(n, Config),
    Key = key(),
-   {ok, Entity} = ambitz:spawn(
-      ambitz:entity(service, {ambit_echo, start_link, []},
-         ambitz:entity(Key)
-      )
-   ),
-   {ambit_echo, _, _} = ambitz:entity(service, Entity),
-   test = ambitz:call(ambit_req_call, Key, test, [{r, N}]).
+   {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
+   {ambit_echo, _, _} = crdts:value(Val),
+   {ok, #entity{val = Pid}} = ambitz:whereis(ambit, Key, [{r, N}]),
+   [_, _, _] = crdts:value(Pid).   
 
 
 %%%----------------------------------------------------------------------------   
@@ -140,7 +128,6 @@ cluster_pending_peers(N) ->
 key() ->
    random:seed(erlang:now()),
    scalar:s(random:uniform(1 bsl 32)).
-   % scalar:s(random:uniform(1 bsl 4)).
 
 
 

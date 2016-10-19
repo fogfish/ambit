@@ -33,33 +33,6 @@
 -define(CONFIG_N,      1).
 
 %%
-%% heap of vnode processes
-% -define(HEAP_VNODE, [
-%    {keylen,      inf}
-%   ,{supervisor,  ambit_vnode_sup}
-%   ,{factory,     transient}
-% ]).
-
-%%
-%% heap of actor processes
-% -define(HEAP_ACTOR, [
-%    {keylen,      inf}
-%   ,{entity,      ambit_actor}
-%   ,{factory,     temporary}
-% ]).
-
-%%
-%% is request to spawn hand
--define(is_spawn(X), (
-   X =:= create  orelse 
-   X =:= remove  orelse 
-   X =:= lookup  orelse 
-   X =:= process orelse 
-   X =:= whereis
-)).
-
-
-%%
 %% size of ambit api request pool (capacity of coordinator)
 -ifndef(CONFIG_IO_POOL).
 -define(CONFIG_IO_POOL,  100).

@@ -29,10 +29,6 @@
    %% interface
   ,coordinator/2
   ,i/1
-  ,cast/2
-  ,cast/3
-  ,send/2
-  ,send/3
 ]).
 
 %% @todo: vnode management api
@@ -85,32 +81,6 @@ coordinator(Vnode, Pool) ->
 i(Vnode) ->
 	pipe:call(ek:vnode(peer, Vnode), {i, Vnode}).
 
-%%
-%% cast message to vnode (or actor)
--spec cast(ek:vnode(), any()) -> reference().
--spec cast(ek:vnode(), binary(), any()) -> reference().
-
-cast(Vnode, Msg) ->
-   ambit:cast(Vnode, Msg).
-   % pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Msg}).
-
-cast(Vnode, Key, Msg) ->
-   ambit:cast(Vnode, Key, Msg).
-   % pipe:cast(ek:vnode(peer, Vnode), {cast, Vnode, Key, Msg}).
-
-%%
-%% send message to vnode (or actor)
--spec send(ek:vnode(), any()) -> ok.
--spec send(ek:vnode(), binary(), any()) -> ok.
-
-send(Vnode, Msg) ->
-   ambit:send(Vnode, Msg).
-   % pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Msg}).
-
-send(Vnode, Key, Msg) ->
-   ambit:send(Vnode, Key, Msg).
-   % pipe:send(ek:vnode(peer, Vnode), {send, Vnode, Key, Msg}).
-
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -150,34 +120,7 @@ handle({request, Vnode, Key, Msg}, Pipe, State) ->
 
 %%
 %%
-% handle({send, Vnode, Msg}, Pipe, State) ->
-%    Pid = ambit_vnode:spawn(Vnode),
-%    pipe:emit(Pipe, Pid, Msg),
-%    {next_state, handle, State};
-%    % case ensure(Node, Vnode) of
-%    %    {ok,  Pid} ->
-%    %    {error, _} = Error ->
-%    %       pipe:a(Pipe, Error),
-%    %       {next_state, handle, State}
-%    % end;
-   
-
-% handle({send, Vnode, Key, Msg}, _Pipe, State) ->
-%    spawn(
-%       fun() ->
-%          case ambit:whereis(Vnode, Key) of
-%             undefined ->
-%                ok;
-%             Pid       ->
-%                pipe:send(Pid, Msg)
-%          end
-%       end
-%    ),
-%    {next_state, handle, State};
-
-%%
-%%
-handle({join, Peer, _Pid}, _Tx, #{ring := Ring}=State) ->
+handle({join, Peer, _Pid}, _Tx, State) ->
    %% new node joined cluster, all local v-nodes needs to be checked
    %% for relocation/handoff policy 
    ?NOTICE("ambit [peer]: join ~p", [Peer]),
@@ -193,13 +136,13 @@ handle({join, Peer, _Pid}, _Tx, #{ring := Ring}=State) ->
 	% pts:foreach(fun(Addr, Pid) -> dispatch(Ring, Addr, Pid, {join, Peer}) end, vnode),
    {next_state, handle, State};
 
-handle({handoff, Peer}, _Tx, #{ring := Ring}=State) ->
+handle({handoff, Peer}, _Tx, State) ->
    %%  peer temporary down
    ?NOTICE("ambit [peer]: handoff ~p", [Peer]),
    % pts:foreach(fun(Addr, Pid) -> dispatch(Ring, Addr, Pid, {handoff, Peer}) end, vnode),
    {next_state, handle, State};
 
-handle({leave, Peer}, _Tx, #{ring := Ring}=State) ->
+handle({leave, Peer}, _Tx, State) ->
    %%  peer permanently down
    ?NOTICE("ambit [peer]: leave ~p", [Peer]),
    % pts:foreach(fun(Addr, Pid) -> dispatch(Ring, Addr, Pid, {leave, Peer}) end, vnode),
@@ -214,70 +157,4 @@ handle(_Msg, _Pipe, State) ->
 %%% private
 %%%
 %%%----------------------------------------------------------------------------   
-
-%%
-%% ensure vnode is running
-% ensure(_Node, Vnode) ->
-%    ?DEBUG("ambit [peer]: ~p ensure vnode ~p", [_Node, Vnode]),
-%    Addr = ek:vnode(addr, Vnode),
-%    case pns:whereis(vnode, Addr) of
-%       undefined ->
-%          pts:ensure(vnode, Addr, [Vnode]),
-%          {ok, pns:whereis(vnode, Addr)};
-%       Pid       ->
-%          {ok, Pid}
-%    end.
-
-% %%
-% %% lookup service hand of given Vnode
-% lookup(Vnode) ->
-%    pns:whereis(vnode_sys, {ek:vnode(type, Vnode), ek:vnode(addr, Vnode)}).
-
-%%
-%% dispatch cluster event to destination vnode process 
-% dispatch(_Ring, {_, _}, _Pid, _Msg) ->
-%    ok;
-% dispatch(Ring, _, Pid, Msg) ->
-%    Vnode = pipe:ioctl(Pid, vnode),
-%    dispatch1(Ring, ek:vnode(type, Vnode), Vnode, Msg).
-   
-% dispatch1(Ring, primary, Vnode, {join, Peer}) ->
-%    Addr = ek:vnode(addr, Vnode),
-%    Node = ek:vnode(node, Vnode),
-%    List = ek:successors(Ring, Addr),
-%    case
-%       {lists:keyfind(Peer, 4, List), lists:keyfind(Node, 4, List)}
-%    of
-%       %% joined peer is not part of vnode successor list, skip to next one 
-%       {false,     _} ->
-%          ok;
-
-%       %% joined peer overtake local vnode, initiate handoff operation
-%       {Vn, false} ->   
-%          pts:send(vnode, Addr, {handoff, Vn});
-
-%       %% joined peer is sibling to local vnode, initiate node repair
-%       {Vn, _} ->
-%          pts:send(vnode, Addr, {sync, Vn})
-%    end;
-
-% dispatch1(Ring, handoff, Vnode, {join, Peer}) ->
-%    Addr = ek:vnode(addr, Vnode),
-%    Node = ek:vnode(node, Vnode),
-%    List = ek:successors(Ring, Addr),
-%    case
-%       {lists:keyfind(Peer, 4, List), Node =:= Peer}
-%    of
-%       %% joined peer is not part of vnode successor list, skip to next one 
-%       {false, _} ->
-%          ok;
-
-%       %% joined peer overtake local hints, initiate handoff operation
-%       {Vn, true} ->   
-%          pts:send(vnode, Addr, {handoff, Vn});
-      
-%       _ ->
-%          ok
-%    end.
-
 

@@ -15,11 +15,6 @@
 %%
 %% @description
 %%   actor management process
-%%
-%% @todo
-%%   * actor signaling
-%%   * actor tth -> hibernate for memory management
-%%   * actor auto conflict resolution
 -module(ambit_actor_bridge).
 -behaviour(pipe).
 
@@ -31,13 +26,7 @@
   ,init/1
   ,free/2
   ,ioctl/2
-
   ,handle/3
-
-   %% api
-  ,service/2
-  ,handoff/3
-  ,sync/2
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -56,7 +45,6 @@ init([Addr, Key, Vnode]) ->
    {ok, handle, 
       #{
          entity  => #entity{key = Key, vnode = [Vnode]}
-% ambitz:vnode([Vnode], ambitz:new(lww_register, Key))
       }
    }.
 
@@ -66,9 +54,6 @@ free(_Reason, #{entity := #entity{key = _Key, vnode = [_Vnode]}}) ->
 
 %%
 %%
-ioctl(process, #{process := Process}) ->
-   % return actor instance process 
-   Process;
 ioctl(service, #{entity  := Service}) ->
    % return entity definition
    Service;
@@ -77,35 +62,9 @@ ioctl(_, _) ->
 
 %%%----------------------------------------------------------------------------   
 %%%
-%%% api
-%%%
-%%%----------------------------------------------------------------------------   
-
-%%
-%% return service / entity specification
-service(Addr, Key) ->
-   case pns:whereis(Addr, Key) of
-      undefined ->
-         undefined;
-      Pid       ->
-         pipe:ioctl(Pid, service)
-   end.
-
-%% handoff actor 
-handoff(Addr, Name, Vnode) ->
-   pts:call(Addr, Name, {handoff, Vnode}, infinity).
-
-%% sync actor
-sync(Pid, Peer) ->
-   pipe:call(Pid, {sync, Peer}, infinity).
-
-%%%----------------------------------------------------------------------------   
-%%%
 %%% pipe
 %%%
 %%%----------------------------------------------------------------------------   
-
-
 
 %%
 %%
@@ -120,39 +79,16 @@ handle({'EXIT', _, normal}, _Pipe, State) ->
 handle({'EXIT', _, Reason}, _Pipe, State) ->
    {stop, Reason, State};
 
-% %%
-% %% actor optional signaling
-% handle({handoff, Vnode}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}}}=State) ->
-%    case erlang:function_exported(Mod, handoff, 2) of
-%       true  ->
-%          pipe:ack(Tx, 
-%             Mod:handoff(Root, Vnode)
-%          ),
-%          {next_state, handle, State};
-%       false ->
-%          pipe:ack(Tx, ok),
-%          {next_state, handle, State}
-%    end;
 handle({handoff, Peer}, Pipe, State) ->
-   % pipe:ack(Pipe, ok),
    pipe:ack(Pipe, syncwith(Peer, State)),
    {next_state, handle, State};
 
-% handle({sync, Peer}, Tx, #{actor := Root, entity := #entity{val ={Mod, _, _}}}=State) ->
-%    case erlang:function_exported(Mod, sync, 2) of
-%       true  ->
-%          pipe:ack(Tx, 
-%             Mod:sync(Root, Peer)
-%          ),
-%          {next_state, handle, State};
-%       false ->
-%          pipe:ack(Tx, ok),
-%          {next_state, handle, State}
-%    end;
 handle({sync, Peer}, Pipe, State) ->
    pipe:ack(Pipe, syncwith(Peer, State)),
-   {next_state, handle, State}.
+   {next_state, handle, State};
 
+handle(ttl,  _, State) ->
+   {stop, normal, State}.   
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -194,39 +130,18 @@ accept(true, false, free, EntityB, State0) ->
    case remove(EntityB, State0) of
       {ok, #{entity := EntityA} = State1} ->
          Entity = join(EntityA, EntityB),
+         tempus:timer(opts:val(ttl, undefined, ambit), ttl),
          {{ok, Entity}, State1#{entity => Entity}};
       {error,   _} = Error ->
          {Error, State0}
    end;
-
-% accept(accept, call, Entity0, State0) ->
-%    case call(Entity0, State0) of
-%       {error,   _} = Error ->
-%          {Error, State0};
-%       {Value, State1} ->
-%          Entity1 = entity(Entity0, State1),
-%          {{ok, Entity1#entity{val = Value}}, State1#{entity => Entity1}}
-%    end;
-
-% accept(accept, snapshot, #entity{val = Snap}=Entity0, #{actor := Pid} = State0) ->
-%    %% @todo: snapshot conflict resolution
-%    case pipe:ioctl(Pid, {snapshot, Snap}) of
-%       {error,   _} = Error ->
-%          {Error, State0};
-%       ok ->
-%          Entity1 = entity(Entity0, State0),
-%          {{ok, Entity1}, State0#{entity => Entity1}}
-%    end;
    
 accept(_, _, _Msg, _EntityB, #{entity := #entity{key =_Key} = EntityA} = State) ->
    ?DEBUG("ambit [actor]: ~p skips ~p", [_Key, _Msg]),
    {{ok, EntityA}, State}.
 
-% accept(conflict, _Msg, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
-%    % @todo: conflict resolution
-%    ?DEBUG("ambit [actor]: ~p ~p conflict with ~p", [_Key, _Msg, uid:diff(_VsnA, _VsnB)]),
-%    {{error, conflict}, State}.
-
+%%
+%%
 join(#entity{val = A} = EntityA, #entity{val = B}) ->
    EntityA#entity{val = crdts:join(A, B)}.
 
@@ -258,36 +173,11 @@ put(Lens, #entity{val = A} = Entity, #{actor := Pid, entity := #entity{vnode = V
    {ok, B} = pipe:call(Pid, {put, Lens, A}),
    {ok, Entity#entity{vnode = Vnode, val = B}}.
 
+%%
+%%
 get(Lens, #entity{} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
    {ok, B} = pipe:call(Pid, {get, Lens}),
    {ok, Entity#entity{vnode = Vnode, val = B}}.
-
-
-% ioctl(Lens, Entity0, #{actor := Pid, entity := Entity}) ->
-%    %% @todo: preserve list of Lenses to gset and use it sync/handoff
-%    Entity1 = pipe:ioctl(Pid, Lens),
-%    case {ambitz:descend(Entity0, Entity1), ambitz:descend(Entity1, Entity0)} of
-%       {false, true} ->
-%          Entity2 = ambitz:join(Entity1, Entity0),
-%          pipe:ioctl(Pid, {Lens, Entity2}),
-%          {ok, ambitz:vnode(ambitz:vnode(Entity), Entity2)};
-
-%       _ ->
-%          {ok, ambitz:vnode(ambitz:vnode(Entity), Entity1)}
-%    end;
-
-% ioctl(_Lens, _Entity, _) ->
-%    {error, no_actor}.
-
-% %%
-% %%
-% call(#entity{val = Msg}, #{actor := Pid} = State) ->
-%    %% @todo: handle timeout
-%    {pipe:call(Pid, Msg, 60000), State};
-
-% call(_, State) ->
-%    {{error, no_actor}, State}.
-
 
 %%
 %%
@@ -298,158 +188,9 @@ lookup(_, #{entity := Entity}) ->
 %%
 discover(#entity{val = Val} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
    {ok, Entity#entity{vnode = Vnode, val = crdts:update(Pid, Val)}};
-   % %% @todo: think about value copy
-   % #entity{type = Type, val = Val} = ambitz:put(Pid, ambitz:new(gset, ambitz:key(Entity))),
-   % {ok, Entity#entity{type = Type, val = Val}};
 
 discover(#entity{} = Entity, #{entity := #entity{vnode = Vnode}}) ->
    {ok, Entity#entity{vnode = Vnode}}.
-   % #entity{type = Type, val = Val} = ambitz:new(gset, ambitz:key(Entity)),
-   % {ok, Entity#entity{type = Type, val = Val}}.
-
-
-
-% %%
-% %%
-% create(#entity{vsn = VsnB} = Entity, #{entity := #entity{vsn = VsnA}} = State) ->
-%    create(descend(VsnA, VsnB), Entity, State).
-
-% create({true, _}, _, #{entity := Entity} = State) ->
-%    % VsnB -> VsnA : skip request
-%    {{ok, Entity}, State};
-
-% create({_, true}, Entity0, #{vnode := Vnode} = State) ->
-%    % VsnA -> VsnB : create actor
-%    case actor_init(Vnode, Entity0, State) of
-%       {ok, Pid} ->
-%          Entity1 = entity(Entity0, State),
-%          {{ok, Entity1}, State#{entity => Entity1, actor => Pid}};
-%       {error,_} = Error ->
-%          {Error, State}
-%    end;
-
-% create({_, _}, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
-%    % VsnA || VsnB : conflict
-%    % @todo: conflict resolution
-%    ?DEBUG("ambit [actor]: ~p create conflict with ~p", [_Key, uid:diff(_VsnA, _VsnB)]),
-%    {{error, conflict}, State}.
-
-
-% %%
-% %%
-% remove(#entity{vsn = VsnB} = Entity, #{entity := #entity{vsn = VsnA}} = State) ->
-%    remove(descend(VsnA, VsnB), Entity, State).
-
-% remove({true, _}, _, #{entity := Entity} = State) ->
-%    % VsnB -> VsnA : skip request
-%    {{ok, Entity}, State};
-
-% remove({_, true}, Entity0, #{vnode := Vnode} = State) ->
-%    % VsnA -> VsnB : create actor
-%    case actor_free(Vnode, Entity0, State) of
-%       ok ->
-%          Entity1 = entity(Entity0, State),
-%          {{ok, Entity1}, maps:remove(actor, State#{entity => Entity1})};
-%       {error,_} = Error ->
-%          {Error, State}
-%    end;
-
-% remove({_, _}, #entity{key = _Key, vsn = _VsnB}, #{entity := #entity{vsn = _VsnA}} = State) ->
-%    % VsnA || VsnB : conflict
-%    % @todo: conflict resolution
-%    ?DEBUG("ambit [actor]: ~p remove conflict with ~p", [_Key, uid:diff(_VsnA, _VsnB)]),
-%    {{error, conflict}, State}.
-
-% %%
-% %%
-% actor_init(_, _, #{actor := Pid}) ->
-%    {ok, Pid};
-% actor_init(Vnode, #entity{val = {M, F, A}}, State) ->
-%    erlang:apply(M, F, [Vnode|A]).
-
-% %%
-% %%
-% actor_free(_, _, #{actor := Pid}) ->
-%    erlang:exit(Pid, normal),
-%    ok;
-% actor_free(_, _, _) ->
-%    ok.
-
-%%
-%%
-descend(EntityA, EntityB) ->
-   case {ambitz:descend(EntityA, EntityB), ambitz:descend(EntityB, EntityA)} of
-      % a -> b : accept request 
-      {_, true} -> accept;
-      % b -> a : skip request 
-      {true, _} -> skip;
-      % conflict
-      {_,    _} -> conflict 
-   end.
-
-
-%%
-%%
-% handle({create, #entity{key = _Key, vsn = VsnA}=Entity}, Pipe, #{entity := #entity{vsn = VsnB}}=State0) ->
-%    case {uid:descend(VsnA, VsnB), uid:descend(VsnB, VsnA)} of
-%       %% request is descend of actor -> create actor if not exists
-%       {true,  _} ->
-%          {Result, State1} = create(Entity, State0),
-%          pipe:ack(Pipe, Result),
-%          tempus:timer(opts:val(ttl, undefined, ambit), ttl),
-%          {next_state, handle, State1};
-
-%       %% actor is descend of request -> skip create request
-%       {_,  true} ->
-%          pipe:ack(Pipe, {ok, Entity}),
-%          {next_state, handle, State0};
-
-%       %% conflict -> @todo: automatic conflict resolution 
-%       _ ->
-%          ?DEBUG("ambit [actor]: ~p create conflict with ~p", [_Key, uid:diff(VsnA, VsnB)]),
-%          pipe:ack(Pipe, {error, conflict}),
-%          {next_state, handle, State0}
-%    end;
-
-% handle({remove, #entity{key = _Key, vsn = VsnA}=Entity}, Pipe, #{entity := #entity{vsn = VsnB}}=State0) ->
-%    case {uid:descend(VsnA, VsnB), uid:descend(VsnB, VsnA)} of
-%       %% request is descend of actor -> remove actor if exists
-%       {true,  _} ->
-%          {Result, State1} = remove(Entity, State0),
-%          pipe:ack(Pipe, Result),
-%          case tempus:timer(opts:val(ttd, undefined, ambit), ttd) of
-%             undefined ->
-%                {stop, normal, State1};
-%             _         ->
-%                {next_state, handle, State1}
-%          end;
-
-%       %% actor is descend of request -> ignore request
-%       {_,  true} ->
-%          pipe:ack(Pipe, {ok, Entity}),
-%          {next_state, handle, State0};
-
-%       %% conflict -> @todo: automatic conflict resolution 
-%       _ ->
-%          ?DEBUG("ambit [actor]: ~p remove conflict with ~p", [_Key, uid:diff(VsnA, VsnB)]),
-%          pipe:ack(Pipe, {error, conflict}),
-%          {next_state, handle, State0}
-%    end;
-
-
-
-
-
-
-
-% handle(ttl, Tx, #{entity := #entity{vsn = Vsn}=Entity}=State) ->
-%    handle({remove, Entity#entity{vsn = uid:vclock(Vsn)}}, Tx, State);
-
-% handle(ttd,  _, #{entity := #entity{val = undefined}}=State) ->
-%    {stop, normal, State};   
-
-% handle(_, _, State) ->
-%    {next_state, handle, State}.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -459,109 +200,13 @@ descend(EntityA, EntityB) ->
 
 %%
 %%
-% create(#entity{key = Key, val = {Mod, Fun, Arg}}=Entity0, #{sup := Sup, vnode := Vnode} = State) ->
-%    Addr = ek:vnode(addr, Vnode),
-%    % case ambit_actor_sup:init_service(Sup, {Mod, Fun, [Vnode | Arg]}) of
-%    case erlang:apply(Mod, Fun, [Vnode | Arg]) of
-%       {ok, Root} ->
-%          case erlang:function_exported(Mod, process, 1) of
-%             true  ->
-%                {ok, Pid} = Mod:process(Root),
-%                %% register actor process to the pool
-%                _ = pns:register(ambit, {Addr, Key}, Pid),
-%                Entity1 = entity(Entity0, State),
-%                {{ok, Entity1}, State#{actor => Root, process => Pid,  entity => Entity1}};
-
-%             false ->
-%                %% register actor process to the pool
-%                _ = pns:register(ambit, {Addr, Key}, Root),
-%                Entity1 = entity(Entity0, State),
-%                {{ok, Entity1}, State#{actor => Root, process => Root, entity => Entity1}}
-%          end;
-%       {error, {already_started, _}} ->
-%          Entity1 = entity(Entity0, State),
-%          {{ok, Entity1}, State#{entity => Entity1}};
-%       {error, _} = Error ->
-%          {Error, State}
-%    end;
-
-% create(#entity{} = Entity0, State) ->
-%    Entity1 = entity(Entity0, State),
-%    {{ok, Entity1}, State#{entity => Entity1}}.
-
-%%
-%%
-% remove(#entity{key = Key} = Entity0, #{sup := Sup, vnode := Vnode} = State) ->
-%    Addr = ek:vnode(addr, Vnode),
-%    _ = ambit_actor_sup:free_service(Sup),
-%    _ = pns:unregister(ambit, {Addr, Key}),
-%    % _ = pns:unregister(Addr, Key),
-%    Entity1 = entity(Entity0#entity{val = undefined}, State),
-%    % @todo: ttl timer 
-%    {{ok, Entity1}, State#{entity => Entity1}}.
-
-%%
-%%
-% entity(#entity{vsn = VsnA, val = {_, _, _}} = Entity0, #{entity := #entity{vsn = VsnB, vnode = Vnode}}) ->
-%    Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB), vnode = Vnode},
-%    ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
-%    Entity1;
-
-% entity(#entity{vsn = VsnB}, #{entity := #entity{vsn = VsnA} = Entity0}) ->
-%    Entity1 = Entity0#entity{vsn = uid:join(VsnA, VsnB)},
-%    ?DEBUG("ambit [actor]: set entity ~p", [Entity1]),
-%    Entity1.
-
-
-%%
-%%
-syncwith(Peer, #{entity := #entity{key = Key} = Entity, actor := Pid}) ->
+syncwith(Peer, #{entity := #entity{key = _Key} = Entity, actor := _Pid}) ->
    % @todo: sync internal state
-   ?NOTICE("ambit [actor]: sync (+) ~p with ~p", [Key, Peer]),
+   ?DEBUG("ambit [actor]: sync (+) ~p with ~p", [_Key, Peer]),
    ambit:call(Peer, {'$ambitz', spawn, Entity}),
-   % syncwith1(Peer, Pid, Entity),
    ok;
-   % Tx = ambit_peer:cast(Peer, {'$ambitz', spawn, Entity}),
-   % receive
-   %    {Tx, _} ->
-   %       syncwith1(Peer, Pid, Entity),
-   %       ok
-   % after ?CONFIG_TIMEOUT_REQ ->
-   %    ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
-   % end.
 
-syncwith(Peer, #{entity := #entity{key = Key} = Entity}) ->
-   ?DEBUG("ambit [actor]: sync (-) ~p with ~p", [Key, Peer]),
+syncwith(Peer, #{entity := #entity{key = _Key} = Entity}) ->
+   ?DEBUG("ambit [actor]: sync (-) ~p with ~p", [_Key, Peer]),
    ambit:call(Peer, {'$ambitz', free, Entity}),
    ok.
-   % Tx = ambit_peer:cast(Peer, {'$ambitz', free, Entity}),
-   % receive
-   %    {Tx, _} ->
-   %       ok
-   % after ?CONFIG_TIMEOUT_REQ ->
-   %       ok
-   % end;
-
-
-
-
-syncwith1(Peer, Pid, #entity{key = Key} = Entity) ->
-   try
-      %% snapshot feature might not be supported by actor
-      case pipe:ioctl(Pid, snapshot) of
-         undefined ->
-            ok;
-         Snapshot ->
-            ambit:call(Peer, Key, {'$ambitz', snapshot, Entity#entity{val = Snapshot}})
-            % Tx = ambit_peer:cast(Peer, Key, {'$ambitz', snapshot, Entity#entity{val = Snapshot}}),
-            % receive
-            %    {Tx, _} ->
-            %       ok
-            % after ?CONFIG_TIMEOUT_REQ ->
-            %    ?ERROR("ambit [actor]: sync recovery timeout ~p", [Peer])
-            % end
-      end
-   catch _:_ ->
-      ok
-   end.
-

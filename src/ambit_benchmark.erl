@@ -106,15 +106,7 @@ init(N) ->
    ).
    
 actor(N) ->
-   ambitz:spawn(ambitz:actor(scalar:s(N), ?SERVICE)).
-   % Ent0 = ambitz:entity(scalar:s(N)),
-   % {ok, Ent1} = ambitz:lookup(Ent0),
-   % case ambitz:entity(val, Ent1) of
-   %    undefined ->
-   %       {ok, _} = ambitz:spawn(ambitz:entity(service, ?SERVICE, Ent1));
-   %    _ ->
-   %       ok
-   % end.
+   ambitz:spawn(scalar:s(N), ?SERVICE).
 
 %%
 %%
@@ -134,32 +126,5 @@ fold([Pid | Pids]) ->
 loop(Pid, _Key, 0) ->
    Pid ! {ok, self()};
 loop(Pid,  Key, N) ->
-   % request(Key),
-   % {ok, Ent} = ambitz:lookup(Key, [{w, 2}]),
-   % ambitz:call(ambitz:entity(val, seq, Ent), [{w, 2}]),
-   ambitz:whereis(ambitz:actor(Key)),
+   ambitz:whereis(Key),
    loop(Pid, Key, N - 1).
-
-% request(Key) ->
-%    case ambitz:lookup(Key, [{w, 2}]) of
-%       {ok, Ent} ->
-%          case ambitz:call(ambitz:entity(val, seq, Ent), [{w, 2}]) of
-%             {ok, _} ->
-%                ok;
-%             {error, _} ->
-%                ok
-%                % request(Key)
-%          end;
-%       {error, _} ->
-%          ok
-%          % request(Key)
-%    end.
-
-
-
-
-
-
-
-
-

@@ -74,7 +74,7 @@ session(_Peer, State) ->
 -spec handshake(ek:vnode(), any(), ek:vnode()) -> ek:vnode().
 
 handshake(Peer, Req, State) ->
-   ambit_peer:send(Peer, {aae, Req}),
+   ambit:send(Peer, {aae, Req}),
    State.
 
 %%
@@ -93,37 +93,5 @@ snapshot(State) ->
 
 diff(Peer, Key, State) ->
    Addr    = ek:vnode(addr, State),
-   %% (?) Why do we force node type to primary, it has to be either primary 
-   %%     or handoff depends on the type
-   % Handoff = erlang:setelement(1, Peer, primary),
    ambit_actor_bridge:sync(pns:whereis(Addr, Key), Peer),
    ok.
-
-   % case ambit_actor:service(Addr, Name) of
-   %    %% service died during aae session
-   %    undefined ->
-   %       ok;      
-
-   %    %% sync removed service
-   %    #entity{val = undefined} = Entity ->
-   %       ?DEBUG("ambit [aae]: (-) ~p", [Name]),
-   %       Tx = ambit_peer:cast(Handoff, {'$ambitz', free, Entity}),
-   %       receive
-   %          {Tx, _} ->
-   %             ok
-   %       after ?CONFIG_TIMEOUT_REQ ->
-   %             ok
-   %       end;
-
-   %    %% sync existed service
-   %    Entity ->
-   %       ?DEBUG("ambit [aae]: (+) ~p", [Name]),
-   %       Tx = ambit_peer:cast(Handoff, {'$ambitz', spawn, Entity}),
-   %       receive
-   %          {Tx, _} ->
-   %             ok
-   %       after ?CONFIG_TIMEOUT_REQ ->
-   %             ok
-   %       end
-   % end.
-

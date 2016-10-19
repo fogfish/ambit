@@ -18,18 +18,6 @@
 -module(ambit).
 -include("ambit.hrl").
 
-%% @todo: 
-%%
-%%   * this is bad idea to address vnode services via node type, 
-%%     we cannot distinguish them e.g. primary aae / handoff aae -> rework
-%% 
-%%   * write-repair (if handoff node do not exist during write)
-%%     a) make N-primary shard
-%%     b) spawn actor + i/o data
-%%     c) kill one primary shard
-%%     d) i/o data, handoff node misses actor (actor needs to be spawned)
-
--export([behaviour_info/1]).
 -export([start/0]).
 -export([
    cast/2, cast/3,
@@ -41,37 +29,6 @@
    predecessors/2,
    i/2
 ]).
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% actor behavior interface
-%%%
-%%%----------------------------------------------------------------------------   
-
-%%
-%% 
-behaviour_info(callbacks) ->
-   [
-      %%
-      %% return pid of actor process 
-      %%
-      %% -spec(process/2 :: (pid(), atom()) -> {ok, any()} | {error, any()}).
-      % {process,   1}
-
-      %%
-      %% initiate actor handoff procedure
-      %%
-      %% -spec(handoff/2 :: (pid(), ek:vnode()) -> ok).
-      {handoff,   2}
-
-      %%
-      %% initiate actor repair procedure
-      %%
-      %% -spec(sync/2 :: (pid(), ek:vnode()) -> ok).
-     ,{sync,      2}
-   ];
-behaviour_info(_) ->
-   undefined.
 
 %%%----------------------------------------------------------------------------   
 %%%

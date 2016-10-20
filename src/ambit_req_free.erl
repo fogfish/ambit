@@ -28,7 +28,7 @@
    ensure/3,
    guid/1,
    monitor/1,
-   cast/4,
+   cast/3,
    unit/1,
    join/2
 ]).
@@ -67,8 +67,8 @@ monitor(Vnode) ->
 
 %%
 %%
-cast(Vnode, _Key, Req, _Opts) ->
-   ambit:cast(Vnode, _Key, Req).
+cast(Vnode, Entity, _Opts) ->
+   ambit:cast(Vnode, {'$ambitz', free, Entity}).
 
 %%
 %%

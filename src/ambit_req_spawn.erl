@@ -16,7 +16,7 @@
 %% @doc
 %%   ambit spawn transaction
 -module(ambit_req_spawn).
--behaviour(ambitz).
+% -behaviour(ambitz).
 
 -include("ambit.hrl").
 -include_lib("ambitz/include/ambitz.hrl").
@@ -25,12 +25,12 @@
 -export([start_link/0]).
 %% request behaviour
 -export([
-   ensure/3,
-   guid/1,
+   % ensure/3,
+   % guid/1,
    monitor/1,
-   cast/4,
-   unit/1,
-   join/2
+   cast/3
+   % unit/1,
+   % join/2
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -52,13 +52,13 @@ start_link() ->
 
 %%
 %%
-ensure(_Peers, _Key, _Opts) ->
-   ok.
+% ensure(_Peers, _Key, _Opts) ->
+%    ok.
 
 %%
 %% generate globally unique transaction id
-guid(_) ->
-   undefined.
+% guid(_) ->
+%    undefined.
 
 %%
 %%
@@ -67,24 +67,24 @@ monitor(Vnode) ->
 
 %%
 %% 
-cast(Vnode, _Key, Req, _Opts) ->
-   ambit:cast(Vnode, Req).
+cast(Vnode, Entity, _Opts) ->
+   ambit:cast(Vnode, {'$ambitz', spawn, Entity}).
 
 %%
 %%
-unit({ok, Entity}) ->
-   {1, {ok, Entity}};
+% unit({ok, Entity}) ->
+%    {1, {ok, Entity}};
 
-unit({error, Reason}) ->
-   {0, {error, [Reason]}}.
+% unit({error, Reason}) ->
+%    {0, {error, [Reason]}}.
 
-%%
-%%
-join({ok, #entity{vnode = VnodeA, val = A} = EntityA}, {ok, #entity{vnode = VnodeB, val = B}}) ->
-   {ok, EntityA#entity{vnode = VnodeA ++ VnodeB, val = crdts:join(A, B)}};
+% %%
+% %%
+% join({ok, #entity{vnode = VnodeA, val = A} = EntityA}, {ok, #entity{vnode = VnodeB, val = B}}) ->
+%    {ok, EntityA#entity{vnode = VnodeA ++ VnodeB, val = crdts:join(A, B)}};
 
-join({error, A}, {error, B}) ->
-   {error, lists:usort(A ++ B)}.
+% join({error, A}, {error, B}) ->
+%    {error, lists:usort(A ++ B)}.
 
 
 

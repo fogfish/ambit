@@ -25,12 +25,9 @@
 -export([start_link/0]).
 %% request behaviour
 -export([
-   ensure/3,
-   guid/1,
    monitor/1,
    cast/3,
-   unit/1,
-   join/2
+   repair/3
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -52,16 +49,6 @@ start_link() ->
 
 %%
 %%
-ensure(_Peers, _Key, _Opts) ->
-   ok.
-
-%%
-%% generate globally unique transaction id
-guid(_) ->
-   undefined.
-
-%%
-%%
 monitor(Vnode) ->
    erlang:monitor(process, ek:vnode(peer, Vnode)). 
 
@@ -73,20 +60,8 @@ cast(Vnode, Entity, Opts) ->
 
 %%
 %%
-unit({ok, Entity}) ->
-   {1, {ok, Entity}};
-
-unit({error, Reason}) ->
-   {0, {error, [Reason]}}.
-
-%%
-%%
-join({ok, #entity{vnode = VnodeA, val = A} = EntityA}, {ok, #entity{vnode = VnodeB, val = B}}) ->
-   {ok, EntityA#entity{vnode = VnodeA ++ VnodeB, val = crdts:join(A, B)}};
-
-join({error, A}, {error, B}) ->
-   {error, lists:usort(A ++ B)}.
-
-
+repair(Vnode, Entity, Opts) ->
+   {lens, Lens} = lists:keyfind(lens, 1, Opts),
+   ambit:send(Vnode, {'$ambitz', {put, Lens}, Entity}).
 
 

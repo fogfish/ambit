@@ -103,7 +103,7 @@ ping(Config) ->
    {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
    {ambit_echo, _, _} = crdts:value(Val),
    {ok, #entity{val = Pid}} = ambitz:whereis(ambit, Key, [{r, N}]),
-   [_, _, _] = crdts:value(Pid).   
+   N   = length( crdts:value(Pid) ).
 
 
 %%%----------------------------------------------------------------------------   

@@ -22,7 +22,7 @@
 -include_lib("ambitz/include/ambitz.hrl").
 
 -export([
-   start_link/3
+   start_link/4
   ,init/1
   ,free/2
   ,ioctl/2
@@ -35,16 +35,16 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(Addr, Key, Vnode) ->
-   pipe:start_link(?MODULE, [Addr, Key, Vnode], []).
+start_link(Sup, Addr, Key, Vnode) ->
+   pipe:start_link(?MODULE, [Sup, Addr, Key, Vnode], []).
 
-init([Addr, Key, Vnode]) ->
+init([Sup, Addr, Key, Vnode]) ->
    ?DEBUG("ambit [actor]: ~p init ~p", [Vnode, Key]),
    pns:register(Addr, Key, self()),
-   erlang:process_flag(trap_exit, true),
    {ok, handle, 
       #{
-         entity  => #entity{key = Key, vnode = [Vnode]}
+         sup     => Sup
+        ,entity  => #entity{key = Key, vnode = [Vnode]}
       }
    }.
 
@@ -73,12 +73,6 @@ handle({'$ambitz', Msg, Entity}, Pipe, State0) ->
    pipe:a(Pipe, Result),
    {next_state, handle, State1};
 
-handle({'EXIT', _, normal}, _Pipe, State) ->
-   {next_state, handle, maps:remove(actor, State)};
-
-handle({'EXIT', _, Reason}, _Pipe, State) ->
-   {stop, Reason, State};
-
 handle({handoff, Peer}, Pipe, State) ->
    pipe:ack(Pipe, syncwith(Peer, State)),
    {next_state, handle, State};
@@ -88,7 +82,26 @@ handle({sync, Peer}, Pipe, State) ->
    {next_state, handle, State};
 
 handle(ttl,  _, State) ->
-   {stop, normal, State}.   
+   {stop, normal, State};
+
+handle({'DOWN', _, process, Pid, _Reason} = Down, Pipe, #{sup := Sup, actor := Pid} = State) ->
+   case 
+      lists:keyfind(actor, 1, supervisor:which_children(Sup))
+   of
+      false ->
+         {stop, normal, State};
+      {actor, undefined,  _, _} ->
+         {stop, normal, State};
+      {actor, restarting, _, _} ->
+         handle(Down, Pipe, State);
+      {actor, New, _, _} ->
+         erlang:monitor(process, New),
+         {next_state, handle, State#{actor => New}}
+   end;
+
+handle({'DOWN', _, process, _Pid, _Reason}, _Pipe, State) ->
+   {next_state, handle, State}.
+
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -117,8 +130,8 @@ accept(Msg, #entity{val = B} = EntityB, #{entity := #entity{val = A}} = State) -
       Msg, EntityB, State
    ).
 
-accept(true, false, spawn, EntityB, State0) ->
-   case create(EntityB, State0) of
+accept(true, false, {spawn, Supervise}, EntityB, State0) ->
+   case create(Supervise, EntityB, State0) of
       {ok, #{entity := EntityA} = State1} ->
          Entity = join(EntityA, EntityB),
          {{ok, Entity}, State1#{entity => Entity}};
@@ -147,13 +160,18 @@ join(#entity{val = A} = EntityA, #entity{val = B}) ->
 
 %%
 %%
-create(_Entity, #{actor := _} = State) ->
+create(_, _Entity, #{actor := _} = State) ->
    %% @todo: re-spawn actor if signature different
    {ok, State};
-create(#entity{val = B}, #{entity := #entity{vnode = [Vnode]}} = State) ->
+create(Supervise, #entity{val = B}, #{sup := Sup, entity := #entity{vnode = [Vnode]}} = State) ->
    {M, F, A} = crdts:value(B),
-   case erlang:apply(M, F, [Vnode|A]) of
+   case
+      supervisor:start_child(Sup,
+         {actor, {M, F, [Vnode|A]} , Supervise, 10000, worker, dynamic}
+      )
+   of
       {ok, Pid} ->
+         erlang:monitor(process, Pid),
          {ok, State#{actor => Pid}};
       {error, _} = Error ->
          {Error, State}
@@ -161,7 +179,9 @@ create(#entity{val = B}, #{entity := #entity{vnode = [Vnode]}} = State) ->
 
 %%
 %%
-remove(_Entity, #{actor := Pid} = State) ->
+remove(_Entity, #{sup := Sup, actor := Pid} = State) ->
+   supervisor:terminate_child(Sup, actor),
+   supervisor:delete_child(Sup, actor),
    erlang:exit(Pid, normal),
    {ok, maps:remove(actor, State)};
 remove(_Entity, State) ->

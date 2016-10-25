@@ -53,5 +53,6 @@ monitor(Vnode) ->
 
 %%
 %% 
-cast(Vnode, Entity, _Opts) ->
-   ambit:cast(Vnode, {'$ambitz', spawn, Entity}).
+cast(Vnode, Entity, Opts) ->
+   Supervise = opts:val(supervise, temporary, Opts),
+   ambit:cast(Vnode, {'$ambitz', {spawn, Supervise}, Entity}).

@@ -44,7 +44,6 @@ start_link(Vnode) ->
 
 init([Vnode]) ->
    ?DEBUG("ambit [echo]: init ~p", [Vnode]),
-   erlang:process_flag(trap_exit, true),
    {ok, handle, 
       #{
          vnode => Vnode
@@ -57,14 +56,6 @@ free(_Reason, #{vnode := _Vnode}) ->
    ?DEBUG("ambit [echo]: ~p free with ~p", [_Vnode, _Reason]),
    ok.
 
-% ioctl(seq, #{seq := Seq}) ->
-%    Seq;
-% ioctl({seq, Seq}, State) ->
-%    State#{seq => Seq};
-% ioctl(set, #{set := Set}) ->
-%    Set;
-% ioctl({set, Set}, State) ->
-%    State#{set => Set};
 ioctl(_, _) ->
    throw(not_implemented).
 

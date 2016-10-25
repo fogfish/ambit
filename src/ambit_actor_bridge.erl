@@ -171,13 +171,21 @@ remove(_Entity, State) ->
 %%
 put(Lens, #entity{val = A} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
    {ok, B} = pipe:call(Pid, {put, Lens, A}),
-   {ok, Entity#entity{vnode = Vnode, val = B}}.
+   {ok, Entity#entity{vnode = Vnode, val = B}};
+
+put(_, #entity{} = Entity, #{entity := #entity{vnode = Vnode}}) ->
+   {ok, Entity#entity{vnode = Vnode, val = undefined}}.
+
 
 %%
 %%
 get(Lens, #entity{} = Entity, #{actor := Pid, entity := #entity{vnode = Vnode}}) ->
    {ok, B} = pipe:call(Pid, {get, Lens}),
-   {ok, Entity#entity{vnode = Vnode, val = B}}.
+   {ok, Entity#entity{vnode = Vnode, val = B}};
+
+get(_, #entity{} = Entity, #{entity := #entity{vnode = Vnode}}) ->
+   {ok, Entity#entity{vnode = Vnode, val = undefined}}.
+
 
 %%
 %%

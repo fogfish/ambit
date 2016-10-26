@@ -44,6 +44,7 @@ init([Addr, Key, Vnode]) ->
    erlang:process_flag(trap_exit, true),
    {ok, handle, 
       #{
+         tte     => tempus:timer(opts:val(tte, undefined, ambit), ttl),
          entity  => #entity{key = Key, vnode = [Vnode]}
       }
    }.
@@ -88,7 +89,13 @@ handle({sync, Peer}, Pipe, State) ->
    {next_state, handle, State};
 
 handle(ttl,  _, State) ->
-   {stop, normal, State}.   
+   {stop, normal, State};
+
+handle({'DOWN', _, process, Pid, Reason}, _Pipe, #{actor := Pid} = State) ->
+   {stop, Reason, State};
+
+handle({'DOWN', _, process,_Pid,_Reason}, _Pipe, State) ->
+   {next_state, handle, State}.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -117,21 +124,21 @@ accept(Msg, #entity{val = B} = EntityB, #{entity := #entity{val = A}} = State) -
       Msg, EntityB, State
    ).
 
-accept(true, false, spawn, EntityB, State0) ->
+accept(true, false, {spawn, TTL}, EntityB, #{tte := TTE} = State0) ->
    case create(EntityB, State0) of
       {ok, #{entity := EntityA} = State1} ->
          Entity = join(EntityA, EntityB),
-         {{ok, Entity}, State1#{entity => Entity}};
+         tempus:timer(TTL, ttl),
+         {{ok, Entity}, State1#{entity => Entity, tte => tempus:cancel(TTE)}};
       {error,   _} = Error ->
          {Error, State0}
    end;
 
-accept(true, false, free, EntityB, State0) ->
+accept(true, false, free, EntityB, #{tte := TTE} =  State0) ->
    case remove(EntityB, State0) of
       {ok, #{entity := EntityA} = State1} ->
          Entity = join(EntityA, EntityB),
-         tempus:timer(opts:val(ttl, undefined, ambit), ttl),
-         {{ok, Entity}, State1#{entity => Entity}};
+         {{ok, Entity}, State1#{entity => Entity, tte => tempus:timer(TTE, ttl)}};
       {error,   _} = Error ->
          {Error, State0}
    end;
@@ -154,6 +161,7 @@ create(#entity{val = B}, #{entity := #entity{vnode = [Vnode]}} = State) ->
    {M, F, A} = crdts:value(B),
    case erlang:apply(M, F, [Vnode|A]) of
       {ok, Pid} ->
+         erlang:monitor(process, Pid),
          {ok, State#{actor => Pid}};
       {error, _} = Error ->
          {Error, State}

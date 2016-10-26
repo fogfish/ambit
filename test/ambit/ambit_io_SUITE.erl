@@ -83,15 +83,15 @@ end_per_group(_, _Config) ->
 spawn(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
-   {ambit_echo, _, _} = crdts:value(Val).
+   {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_cache, start_link, []}, [{w, N}]),
+   {ambit_cache, _, _} = crdts:value(Val).
 
 %%
 %%
 free(Config) ->
    N   = opts:val(n, Config),
    Key = key(),
-   {ok, _} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
+   {ok, _} = ambitz:spawn(ambit, Key, {ambit_cache, start_link, []}, [{w, N}]),
    {ok, #entity{val = Val}} = ambitz:free(ambit, Key, [{w, N}]),
    undefined = crdts:value(Val).
    
@@ -100,8 +100,8 @@ free(Config) ->
 ping(Config) -> 
    N   = opts:val(n, Config),
    Key = key(),
-   {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_echo, start_link, []}, [{w, N}]),
-   {ambit_echo, _, _} = crdts:value(Val),
+   {ok, #entity{val = Val}} = ambitz:spawn(ambit, Key, {ambit_cache, start_link, []}, [{w, N}]),
+   {ambit_cache, _, _} = crdts:value(Val),
    {ok, #entity{val = Pid}} = ambitz:whereis(ambit, Key, [{r, N}]),
    N   = length( crdts:value(Pid) ).
 

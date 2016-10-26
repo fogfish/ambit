@@ -13,46 +13,55 @@
 %%   See the License for the specific language governing permissions and
 %%   limitations under the License.
 %%
-%% @doc
-%%   ambit spawn transaction
--module(ambit_req_spawn).
-% -behaviour(ambitz).
+%% @description
+%%   example cache service used for RnD and demo purposes
+-module(ambit_cache).
+-behaviour(pipe).
 
 -include("ambit.hrl").
--include_lib("ambitz/include/ambitz.hrl").
 
-%% api
--export([start_link/0]).
-%% request behaviour
 -export([
-   monitor/1,
-   cast/3
+   start_link/1
+  ,start_link/2
+  ,init/1
+  ,free/2
+  ,ioctl/2
+  ,handle/3
 ]).
 
 %%%----------------------------------------------------------------------------   
 %%%
-%%% api
+%%% Factory
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%% 
-start_link() ->
-   ambitz:start_link(?MODULE, opts:val(pool, ?CONFIG_IO_POOL, ambit)).
+start_link(Vnode) ->
+   start_link(Vnode, lwwreg).
+
+start_link(Vnode, Type) ->
+   pipe:start_link(?MODULE, [Vnode, Type], []).
+
+init([_Vnode, Type]) ->
+   ?DEBUG("ambit [cache]: init ~p", [_Vnode]),
+   {ok, handle, #{val => crdts:new(Type)}}.
+
+free(_Reason, _) ->
+   ok.
+
+ioctl(_, _) ->
+   throw(not_implemented).
 
 %%%----------------------------------------------------------------------------   
 %%%
-%%% request
+%%% pipe
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%%
-monitor(Vnode) ->
-   erlang:monitor(process, ek:vnode(peer, Vnode)). 
+handle({put, _, ValA}, Tx, #{val := ValB} = State) ->
+   ValC = crdts:join(ValA, ValB),
+   pipe:ack(Tx, {ok, ValC}),
+   {next_state, handle, State#{val => ValC}};
 
-%%
-%% 
-cast(Vnode, Entity, Opts) ->
-   TTL = opts:val(ttl, undefined, Opts),
-   ambit:cast(Vnode, {'$ambitz', {spawn, TTL}, Entity}).
+handle({get, _}, Tx, #{val := Val} = State) ->
+   pipe:ack(Tx, {ok, Val}),
+   {next_state, handle, State}.

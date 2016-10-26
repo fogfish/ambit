@@ -26,9 +26,10 @@
 ]).
 
 %%
--define(CHILD(Type, I),            {I,  {I, start_link,   []}, transient, infinity,   Type, dynamic}).
--define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, transient, infinity,   Type, dynamic}).
--define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, transient, infinity,   Type, dynamic}).
+-define(CHILD(I),                  {service,                I, permanent, infinity, worker, dynamic}).
+-define(CHILD(Type, I),            {I,  {I, start_link,   []}, permanent, infinity,   Type, dynamic}).
+-define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, permanent, infinity,   Type, dynamic}).
+-define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, permanent, infinity,   Type, dynamic}).
 
 %%-----------------------------------------------------------------------------
 %%

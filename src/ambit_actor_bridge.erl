@@ -22,7 +22,7 @@
 -include_lib("ambitz/include/ambitz.hrl").
 
 -export([
-   start_link/4
+   start_link/3
   ,init/1
   ,free/2
   ,ioctl/2
@@ -35,12 +35,13 @@
 %%%
 %%%----------------------------------------------------------------------------   
 
-start_link(Sup, Addr, Key, Vnode) ->
-   pipe:start_link(?MODULE, [Sup, Addr, Key, Vnode], []).
+start_link(Addr, Key, Vnode) ->
+   pipe:start_link(?MODULE, [Addr, Key, Vnode], []).
 
-init([Sup, Addr, Key, Vnode]) ->
+init([Addr, Key, Vnode]) ->
    ?DEBUG("ambit [actor]: ~p init ~p", [Vnode, Key]),
    pns:register(Addr, Key, self()),
+   {ok, Sup} = ambit_actor_bridge_sup:start_link(),
    {ok, handle, 
       #{
          sup     => Sup

@@ -26,6 +26,6 @@
 start_link(Vnode) ->
    pts:start_link(ek:vnode(addr, Vnode), [
       {keylen,      inf}
-     ,{supervisor,  ambit_actor_bridge_sup}
+     ,{supervisor,  ambit_actor_bridge}
      ,{factory,     temporary}
    ]).

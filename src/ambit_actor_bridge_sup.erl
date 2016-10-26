@@ -21,7 +21,7 @@
 -behaviour(supervisor).
 
 -export([
-   start_link/0
+   start_link/3
   ,init/1
 ]).
 
@@ -36,14 +36,15 @@
 %%
 %%-----------------------------------------------------------------------------
 
-start_link() ->
-   supervisor:start_link(?MODULE, []).
+start_link(Addr, Key, Vnode) ->
+   supervisor:start_link(?MODULE, [Addr, Key, Vnode]).
    
-init(_) ->   
+init([Addr, Key, Vnode]) ->   
    {ok,
       {
-         {one_for_one, 30, 60},
+         {one_for_one, 1000000, 1},
          [
+            ?CHILD(worker, bridge, ambit_actor_bridge, [self(), Addr, Key, Vnode])
          ]
       }
    }.

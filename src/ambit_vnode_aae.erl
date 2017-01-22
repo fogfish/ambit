@@ -88,10 +88,8 @@ snapshot(State) ->
 
 %%
 %% remote peer diff, called for each key, order is arbitrary 
-%%
 -spec diff(ek:vnode(), binary(), ek:vnode()) -> ok.
 
 diff(Peer, Key, State) ->
-   Addr    = ek:vnode(addr, State),
-   ambit_actor_bridge:sync(pns:whereis(Addr, Key), Peer),
-   ok.
+   ambit_actor:sync(State, Key, Peer).
+

@@ -13,13 +13,18 @@
 %%   See the License for the specific language governing permissions and
 %%   limitations under the License.
 %%
+%% @doc
+%%   ambit actor interface
 -module(ambit_actor).
 -include("ambit.hrl").
+-include_lib("ambitz/include/ambitz.hrl").
 
 -export([
    spawn/2,
+   service/2,
    call/3,
-   service/2
+   sync/3,
+   handoff/3
 ]).
 
 %%
@@ -36,9 +41,12 @@ spawn(Vnode, Key) ->
       Pid ->
          Pid
    end.      
-   
+
+
 %%
 %% return service / entity specification
+-spec service(ek:vnode(), _) -> #entity{} | undefined. 
+
 service(Vnode, Key) ->
    Addr = ek:vnode(addr, Vnode),
    case pns:whereis(Addr, Key) of
@@ -50,7 +58,7 @@ service(Vnode, Key) ->
 
 
 %%
-%% request actor
+%% request actor service
 -spec call(ek:vnode(), _, _) -> {ok, _} | {error, _}.
 
 call(Vnode, Key, Req) ->
@@ -61,3 +69,17 @@ call(Vnode, Key, Req) ->
       Pid ->
          pipe:call(Pid, Req)
    end.
+
+%%
+%% reconcile actor with peer
+-spec sync(ek:vnode(), _, ek:vnode()) -> ok.
+
+sync(Vnode, Key, Peer) ->
+   ambit_actor:call(Vnode, Key, {sync, Peer}).
+
+%%
+%% handoff actor to peer
+-spec handoff(ek:vnode(), _, ek:vnode()) -> ok.
+
+handoff(Vnode, Key, Peer) ->
+   ambit_actor:call(Vnode, Key, {handoff, Peer}).

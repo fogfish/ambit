@@ -176,7 +176,7 @@ transfer({Tx, _Result}, _, #{tx := Tx, vnode := Vnode, handoff := Handoff, strea
    {Name, _Pid} = stream:head(Stream),
    %% @todo: make asynchronous handoff with long-term expectation of data transfer
    %%        handoff is only "create feature"
-   ambit_actor_bridge:handoff(ek:vnode(addr, Vnode), Name, Handoff),
+   ambit_actor:handoff(Vnode, Name, Handoff),
    erlang:send(self(), transfer),
    {next_state, suspend, State#{stream => stream:tail(Stream)}};
    
